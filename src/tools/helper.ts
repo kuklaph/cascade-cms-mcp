@@ -1,0 +1,107 @@
+/**
+ * Shared registration helper for all Cascade MCP tools.
+ *
+ * Every tool in this server goes through `registerCascadeTool` so the
+ * validate → handle → format → error-translate pipeline lives in ONE place.
+ * When the MCP SDK or Cascade library contracts change, only this file
+ * needs editing — not all 25 tool registrations.
+ */
+
+import type { z } from "zod";
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type {
+  CallToolResult,
+  ToolAnnotations,
+} from "@modelcontextprotocol/sdk/types.js";
+import {
+  formatResponse,
+  type MarkdownRenderer,
+  type ResponseFormat,
+} from "../formatting.js";
+import { translateError } from "../errors.js";
+import { logToolInvocation } from "../audit.js";
+
+/**
+ * Configuration for a single Cascade MCP tool.
+ *
+ * @typeParam TSchema - The full Zod object schema for this tool's inputs.
+ */
+export interface CascadeToolConfig<TSchema extends z.ZodObject<any>> {
+  /** Tool name (snake_case, "cascade_" prefix). */
+  name: string;
+  /** Short human-facing title. */
+  title: string;
+  /** LLM-facing description. Use `buildCascadeToolDescription` for consistency. */
+  description: string;
+  /** Full Zod object schema; the helper extracts `.shape` before passing to the SDK. */
+  inputSchema: TSchema;
+  /** MCP tool annotations (readOnlyHint, destructiveHint, etc.). */
+  annotations: ToolAnnotations;
+  /**
+   * The Cascade operation to run. Receives validated input minus `response_format`.
+   * May throw; errors are translated via `translateError`.
+   */
+  handler: (input: Omit<z.infer<TSchema>, "response_format">) => Promise<unknown>;
+  /** Optional per-tool markdown override (ignored in json mode). */
+  renderMarkdown?: MarkdownRenderer;
+}
+
+/**
+ * Register a Cascade MCP tool on the given server.
+ *
+ * Wraps the tool handler in a pipeline that:
+ *   1. Extracts `response_format` from the validated input (defaults "markdown").
+ *   2. Passes the rest of the input to the handler.
+ *   3. Formats the result via `formatResponse`.
+ *   4. Translates any thrown error via `translateError`.
+ */
+export function registerCascadeTool<TSchema extends z.ZodObject<any>>(
+  server: McpServer,
+  config: CascadeToolConfig<TSchema>,
+): void {
+  const { name, title, description, inputSchema, annotations, handler, renderMarkdown } = config;
+
+  server.registerTool(
+    name,
+    {
+      title,
+      description,
+      inputSchema: inputSchema.shape as any,
+      annotations,
+    },
+    // Wrapped handler: the MCP SDK provides already-validated input here.
+    (async (input: Record<string, unknown>): Promise<CallToolResult> => {
+      const start = Date.now();
+      try {
+        const format: ResponseFormat =
+          (input?.response_format as ResponseFormat | undefined) ?? "markdown";
+
+        // Strip response_format before delegating to the Cascade operation.
+        const { response_format: _rf, ...rest } = input ?? {};
+
+        const result = await handler(rest as Omit<z.infer<TSchema>, "response_format">);
+
+        const formatted = formatResponse(result, format, name, renderMarkdown);
+        logToolInvocation(name, "ok", Date.now() - start);
+        return formatted;
+      } catch (err) {
+        const translated = translateError(err, name);
+        const errMsg = err instanceof Error ? err.message : String(err);
+        logToolInvocation(name, "error", Date.now() - start, errMsg);
+        return translated;
+      }
+    }) as any,
+  );
+}
+
+/**
+ * Compose a consistent tool description. Keeps the footer prose identical
+ * across the 25 tools so agents see uniform guidance on response formats.
+ */
+export function buildCascadeToolDescription(base: string): string {
+  const footer =
+    "Supports response_format: markdown (default, human-readable) or json (full payload).";
+  const trimmed = base.trim();
+  const separator = trimmed.endsWith(".") ? " " : ". ";
+  return `${trimmed}${separator}${footer}`;
+}
