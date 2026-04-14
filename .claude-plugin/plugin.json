@@ -8,5 +8,15 @@
   "homepage": "https://github.com/kuklaph/cascade-cms-mcp#readme",
   "repository": "https://github.com/kuklaph/cascade-cms-mcp",
   "license": "MIT",
-  "keywords": ["mcp", "cascade-cms", "cms", "claude-plugin"]
+  "keywords": ["mcp", "cascade-cms", "cms", "claude-plugin"],
+  "mcpServers": {
+    "cascade-cms": {
+      "command": "npx",
+      "args": ["-y", "cascade-cms-mcp-server"],
+      "env": {
+        "CASCADE_API_KEY": "${CASCADE_API_KEY}",
+        "CASCADE_URL": "${CASCADE_URL}"
+      }
+    }
+  }
 }
