@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 /**
  * Entry point for the Cascade CMS MCP server.
  *

@@ -6,59 +6,26 @@ Built in TypeScript on [Bun](https://bun.sh). **25 tools** across 9 cohorts (CRU
 
 ## Requirements
 
-- Bun 1.0 or later
-- A Cascade CMS instance (v8.1.1+) with an API key
-- An MCP client (Claude Desktop, MCP Inspector, or any compliant agent)
+- **End users**: Node 18+ (for `npx`) **or** Bun 1.0+ (for `bunx`). Either works — `bunx` is recommended if you already have Bun for faster install.
+- **Contributors**: Bun 1.0+ for the dev toolchain (tests, watch mode) — see [Development](#development).
+- A Cascade CMS instance (v8.1.1+) with an API key.
+- An MCP client (Claude Desktop, Cline, MCP Inspector, or any compliant agent).
 
-## Installation
+## Quick Start
 
-```bash
-bun install
-```
+Add a server entry to your MCP client's config. Example for **Claude Desktop** (Windows, macOS — Anthropic does not ship Claude Desktop for Linux; on Linux use [Claude Code](#claude-code), Cline, or another MCP-compatible client).
 
-## Configuration
+Edit `claude_desktop_config.json`:
 
-Copy `.env.example` to `.env` and fill in your Cascade credentials:
-
-```bash
-cp .env.example .env
-```
-
-```
-CASCADE_API_KEY=your_api_key_here
-CASCADE_URL=https://yourorg.cascadecms.com/api/v1/
-# Optional:
-# CASCADE_TIMEOUT_MS=30000
-```
-
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `CASCADE_API_KEY` | Yes | API key generated from your Cascade dashboard |
-| `CASCADE_URL` | Yes | Your Cascade API URL (e.g., `https://yourorg.cascadecms.com/api/v1/`) |
-| `CASCADE_TIMEOUT_MS` | No | Request timeout in milliseconds (default: 30000) |
-
-The server refuses to start if either `CASCADE_API_KEY` or `CASCADE_URL` is missing or invalid.
-
-## Running
-
-```bash
-bun start
-```
-
-The server listens on stdio. Log messages go to stderr; the MCP protocol stream uses stdout.
-
-## MCP Client Configuration
-
-### Claude Desktop
-
-Add this to your Claude Desktop `config.json`:
+- **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
+- **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
 
 ```json
 {
   "mcpServers": {
     "cascade-cms": {
-      "command": "bun",
-      "args": ["run", "C:\\path\\to\\cascade-cms-mcp\\src\\index.ts"],
+      "command": "bunx",
+      "args": ["cascade-cms-mcp-server"],
       "env": {
         "CASCADE_API_KEY": "your_api_key_here",
         "CASCADE_URL": "https://yourorg.cascadecms.com/api/v1/"
@@ -68,13 +35,98 @@ Add this to your Claude Desktop `config.json`:
 }
 ```
 
-Adjust the path to match your install location. Restart Claude Desktop after editing.
+Restart the client. `bunx` fetches the package on first run and caches it (recommended for speed if you have [Bun](https://bun.sh) installed).
+
+**Node-only alternative** — swap `bunx` for `npx` if you don't have Bun:
+
+```json
+"command": "npx",
+"args": ["-y", "cascade-cms-mcp-server"]
+```
+
+Both resolve to the same entry point (`dist/index.js`) via the package's `bin`; choose whichever is already on your machine.
+
+### Environment variables
+
+The MCP client passes these to the server via the `env` block. No `.env` file involved during normal use.
+
+| Variable             | Required | Description                                                           |
+| -------------------- | :------: | --------------------------------------------------------------------- |
+| `CASCADE_API_KEY`    |   Yes    | API key generated from your Cascade dashboard                         |
+| `CASCADE_URL`        |   Yes    | Your Cascade API URL (e.g., `https://yourorg.cascadecms.com/api/v1/`) |
+| `CASCADE_TIMEOUT_MS` |    No    | Request timeout in milliseconds (default: 30000)                      |
+
+The server exits with a clear error on startup if `CASCADE_API_KEY` or `CASCADE_URL` is missing or invalid.
+
+## MCP Client Configuration
+
+### Claude Desktop
+
+The Quick Start snippet above is the canonical form. Restart Claude Desktop after editing the config file; the MCP server spawns automatically when Claude starts.
+
+### Claude Code
+
+Option A — project-scoped `.mcp.json` at your repo root:
+
+```json
+{
+  "mcpServers": {
+    "cascade-cms": {
+      "command": "bunx",
+      "args": ["cascade-cms-mcp-server"],
+      "env": {
+        "CASCADE_API_KEY": "your_api_key_here",
+        "CASCADE_URL": "https://yourorg.cascadecms.com/api/v1/"
+      }
+    }
+  }
+}
+```
+
+Swap `bunx` → `npx` (with `"args": ["-y", "cascade-cms-mcp-server"]`) if you don't have Bun installed.
+
+Option B — `claude mcp add` from the CLI.
 
 ### MCP Inspector
 
+Interactive debug UI (recommended — uses `bunx`):
+
 ```bash
-npx @modelcontextprotocol/inspector bun run src/index.ts
+bunx @modelcontextprotocol/inspector bunx cascade-cms-mcp-server
 ```
+
+Or with `npx` if you don't have Bun:
+
+```bash
+npx @modelcontextprotocol/inspector npx -y cascade-cms-mcp-server
+```
+
+CLI mode (list tools without the UI):
+
+```bash
+# POSIX shell (bash, zsh) — bunx preferred:
+CASCADE_API_KEY=... CASCADE_URL=... \
+  bunx @modelcontextprotocol/inspector --cli \
+  bunx cascade-cms-mcp-server --method tools/list
+```
+
+On Windows, set env vars separately first. PowerShell:
+
+```powershell
+$env:CASCADE_API_KEY="..."
+$env:CASCADE_URL="..."
+bunx @modelcontextprotocol/inspector --cli bunx cascade-cms-mcp-server --method tools/list
+```
+
+Or Windows `cmd`:
+
+```cmd
+set CASCADE_API_KEY=...
+set CASCADE_URL=...
+bunx @modelcontextprotocol/inspector --cli bunx cascade-cms-mcp-server --method tools/list
+```
+
+Every invocation above works with `npx` (with `-y` on the package) if Bun isn't installed. Both tools resolve the published package identically.
 
 The Inspector will list all 25 tools and 2 resources, and let you invoke them interactively.
 
@@ -99,82 +151,82 @@ Every tool accepts an optional `response_format` parameter (`"markdown"` or `"js
 
 ### Assets (CRUD)
 
-| Tool | Read-only | Description |
-|------|:---------:|-------------|
-| `cascade_read` | Yes | Read an asset by identifier (id or path + type) |
-| `cascade_create` | No | Create a new asset (strict schemas for page/file/folder/block/symlink; passthrough for others) |
-| `cascade_edit` | No | Edit an existing asset |
-| `cascade_remove` | No | Delete an asset (with optional workflow + delete parameters) |
-| `cascade_move` | No | Move and/or rename an asset |
-| `cascade_copy` | No | Copy an asset to a new container with a new name |
+| Tool             | Read-only | Description                                                                                    |
+| ---------------- | :-------: | ---------------------------------------------------------------------------------------------- |
+| `cascade_read`   |    Yes    | Read an asset by identifier (id or path + type)                                                |
+| `cascade_create` |    No     | Create a new asset (strict schemas for page/file/folder/block/symlink; passthrough for others) |
+| `cascade_edit`   |    No     | Edit an existing asset                                                                         |
+| `cascade_remove` |    No     | Delete an asset (with optional workflow + delete parameters)                                   |
+| `cascade_move`   |    No     | Move and/or rename an asset                                                                    |
+| `cascade_copy`   |    No     | Copy an asset to a new container with a new name                                               |
 
 ### Search
 
-| Tool | Read-only | Description |
-|------|:---------:|-------------|
-| `cascade_search` | Yes | Search assets by terms, field, and type filter (paginated) |
+| Tool             | Read-only | Description                                                |
+| ---------------- | :-------: | ---------------------------------------------------------- |
+| `cascade_search` |    Yes    | Search assets by terms, field, and type filter (paginated) |
 
 ### Sites
 
-| Tool | Read-only | Description |
-|------|:---------:|-------------|
-| `cascade_list_sites` | Yes | List all sites accessible with current credentials |
-| `cascade_site_copy` | No | Copy an entire site to a new site with a new name (long-running operation) |
+| Tool                 | Read-only | Description                                                                |
+| -------------------- | :-------: | -------------------------------------------------------------------------- |
+| `cascade_list_sites` |    Yes    | List all sites accessible with current credentials                         |
+| `cascade_site_copy`  |    No     | Copy an entire site to a new site with a new name (long-running operation) |
 
 ### Access Rights
 
-| Tool | Read-only | Description |
-|------|:---------:|-------------|
-| `cascade_read_access_rights` | Yes | Read access rights for an asset |
-| `cascade_edit_access_rights` | No | Modify access rights (optionally apply to children) |
+| Tool                         | Read-only | Description                                         |
+| ---------------------------- | :-------: | --------------------------------------------------- |
+| `cascade_read_access_rights` |    Yes    | Read access rights for an asset                     |
+| `cascade_edit_access_rights` |    No     | Modify access rights (optionally apply to children) |
 
 ### Workflow
 
-| Tool | Read-only | Description |
-|------|:---------:|-------------|
-| `cascade_read_workflow_settings` | Yes | Read workflow settings for a container |
-| `cascade_edit_workflow_settings` | No | Update workflow settings for a container |
-| `cascade_read_workflow_information` | Yes | Read in-flight workflow info for an asset |
-| `cascade_perform_workflow_transition` | No | Advance a workflow to its next action |
+| Tool                                  | Read-only | Description                               |
+| ------------------------------------- | :-------: | ----------------------------------------- |
+| `cascade_read_workflow_settings`      |    Yes    | Read workflow settings for a container    |
+| `cascade_edit_workflow_settings`      |    No     | Update workflow settings for a container  |
+| `cascade_read_workflow_information`   |    Yes    | Read in-flight workflow info for an asset |
+| `cascade_perform_workflow_transition` |    No     | Advance a workflow to its next action     |
 
 ### Messages & Subscribers
 
-| Tool | Read-only | Description |
-|------|:---------:|-------------|
-| `cascade_list_subscribers` | Yes | List users subscribed to an asset |
-| `cascade_list_messages` | Yes | List in-Cascade messages for the authenticated user (paginated) |
-| `cascade_mark_message` | No | Mark a message as read/unread/archive/unarchive |
-| `cascade_delete_message` | No | Permanently delete a message |
+| Tool                       | Read-only | Description                                                     |
+| -------------------------- | :-------: | --------------------------------------------------------------- |
+| `cascade_list_subscribers` |    Yes    | List users subscribed to an asset                               |
+| `cascade_list_messages`    |    Yes    | List in-Cascade messages for the authenticated user (paginated) |
+| `cascade_mark_message`     |    No     | Mark a message as read/unread/archive/unarchive                 |
+| `cascade_delete_message`   |    No     | Permanently delete a message                                    |
 
 ### Check In / Check Out
 
-| Tool | Read-only | Description |
-|------|:---------:|-------------|
-| `cascade_check_out` | No | Lock an asset for exclusive editing |
-| `cascade_check_in` | No | Release a checked-out asset with a comment |
+| Tool                | Read-only | Description                                |
+| ------------------- | :-------: | ------------------------------------------ |
+| `cascade_check_out` |    No     | Lock an asset for exclusive editing        |
+| `cascade_check_in`  |    No     | Release a checked-out asset with a comment |
 
 ### Audits & Preferences
 
-| Tool | Read-only | Description |
-|------|:---------:|-------------|
-| `cascade_read_audits` | Yes | Read audit log entries matching parameters (paginated) |
-| `cascade_read_preferences` | Yes | Read system preferences |
-| `cascade_edit_preference` | No | Update a single system preference |
+| Tool                       | Read-only | Description                                            |
+| -------------------------- | :-------: | ------------------------------------------------------ |
+| `cascade_read_audits`      |    Yes    | Read audit log entries matching parameters (paginated) |
+| `cascade_read_preferences` |    Yes    | Read system preferences                                |
+| `cascade_edit_preference`  |    No     | Update a single system preference                      |
 
 ### Publish
 
-| Tool | Read-only | Description |
-|------|:---------:|-------------|
-| `cascade_publish_unpublish` | No | Publish an asset (or unpublish with `unpublish: true` in publishInformation) |
+| Tool                        | Read-only | Description                                                                  |
+| --------------------------- | :-------: | ---------------------------------------------------------------------------- |
+| `cascade_publish_unpublish` |    No     | Publish an asset (or unpublish with `unpublish: true` in publishInformation) |
 
 ## Resources
 
 Resources expose URI-addressable reference data that agents can fetch via MCP `resources/read` without invoking a tool.
 
-| URI | Kind | Description |
-|-----|:----:|-------------|
-| `cascade://entity-types` | Static | JSON listing all Cascade entity type strings (page, file, folder, block, template, etc.) with short descriptions |
-| `cascade://sites` | Dynamic | Live `listSites()` result (JSON). On upstream failure, body is a JSON error envelope: `{ "error": "..." }` |
+| URI                      |  Kind   | Description                                                                                                      |
+| ------------------------ | :-----: | ---------------------------------------------------------------------------------------------------------------- |
+| `cascade://entity-types` | Static  | JSON listing all Cascade entity type strings (page, file, folder, block, template, etc.) with short descriptions |
+| `cascade://sites`        | Dynamic | Live `listSites()` result (JSON). On upstream failure, body is a JSON error envelope: `{ "error": "..." }`       |
 
 Both resources advertise `application/json`. The error envelope on `cascade://sites` is a valid JSON object, so agents can reliably `JSON.parse` the response without checking a separate error flag.
 
@@ -184,10 +236,10 @@ Both resources advertise `application/json`. The error envelope on `cascade://si
 
 ### Parameters
 
-| Field | Type | Default | Bounds |
-|-------|------|:-------:|:------:|
-| `limit` | number | 50 | 1–500 |
-| `offset` | number | 0 | ≥ 0 |
+| Field    | Type   | Default | Bounds |
+| -------- | ------ | :-----: | :----: |
+| `limit`  | number |   50    | 1–500  |
+| `offset` | number |    0    |  ≥ 0   |
 
 ### Response envelope
 
@@ -374,16 +426,35 @@ If Cascade returns a validation error for a passthrough asset, the error message
 
 ## Development
 
+For contributors and those wanting to run a local build or modify the server. End users do not need to clone — use the `npx` snippet in [Quick Start](#quick-start).
+
+### Setup
+
 ```bash
-# Run all tests (238 tests across 21 files)
-bun test
-
-# Type-check the project
-bun run typecheck
-
-# Start the server in watch mode
-bun run dev
+git clone https://github.com/kuklaph/cascade-cms-mcp-server
+cd cascade-cms-mcp-server
+bun install
 ```
+
+Optional: copy `.env.example` to `.env` and fill in credentials for local smoke tests (the MCP client's `env` block is the production path; `.env` is a developer convenience).
+
+### Commands
+
+The dev loop requires Bun (scripts shell out to `bun run`). End users running the published package only need Node 18+.
+
+```bash
+bun test                 # Run all tests (238 tests across 21 files)
+bun run typecheck        # Type-check with tsc --noEmit
+bun run build            # Compile src/ → dist/ via tsconfig.build.json
+bun run smoke:node       # Boot dist/index.js with Node, verify startup banner
+bun run dev              # Watch mode (runs src/index.ts on save)
+bun start                # Run src/index.ts once with Bun
+node dist/index.js       # Run the built output with Node (after bun run build)
+```
+
+### Publishing
+
+`prepublishOnly` runs `bun test && bun run build && bun run smoke:node` automatically before `npm publish` / `bun publish`, so a broken tree cannot ship. The smoke test boots `node dist/index.js` with dummy credentials and requires the startup banner on stderr, catching any Node-runtime regression that the Bun test suite can't see. The published package ships only `dist/`, `README.md`, and `LICENSE` (see `"files"` in `package.json`).
 
 ### Project Structure
 
@@ -422,7 +493,7 @@ tests/
 
 ## How It Works
 
-1. `src/index.ts` redirects `console.*` to stderr (guards the stdio protocol stream from accidental stdout writes by dependencies), loads env vars, builds a Cascade client from `cascade-cms-api`, creates an MCP server, registers 25 tools plus 2 resources, and connects over stdio.
+1. The MCP client (Claude Desktop, Cline, etc.) spawns `bunx cascade-cms-mcp-server` (or `npx -y cascade-cms-mcp-server`) as a subprocess, injecting `CASCADE_API_KEY` and `CASCADE_URL` as env vars. The runner resolves the package's `bin` entry to `dist/index.js`, and the `#!/usr/bin/env node` shebang routes execution through Node. The entry point redirects `console.*` to stderr (guards the stdio protocol stream from accidental stdout writes by dependencies), validates config, builds a Cascade client from `cascade-cms-api`, creates an MCP server, registers 25 tools plus 2 resources, and connects over stdio.
 2. Each cohort file (`src/tools/<cohort>.ts`) calls `registerCascadeTool(server, config)` for each of its tools.
 3. The helper wraps the tool handler with: start timer → Zod input validation → delegate to the Cascade client method → format response (markdown or JSON) → catch + translate errors to MCP `isError: true` results → emit a stderr audit record (`ok`/`error` + duration + redacted error text).
 4. Paginated tools (`cascade_search`, `cascade_list_messages`, `cascade_read_audits`) extract `limit`/`offset` from input, call Cascade for the full result set, and slice client-side via `paginatedHandler`.

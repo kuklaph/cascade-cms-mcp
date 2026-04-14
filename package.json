@@ -4,15 +4,38 @@
   "description": "MCP server exposing Cascade CMS API operations to LLMs and agents",
   "author": "Philip Kukla",
   "license": "MIT",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "cascade-cms",
+    "cms",
+    "llm-tools"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kuklaph/cascade-cms-mcp-server.git"
+  },
+  "bugs": {
+    "url": "https://github.com/kuklaph/cascade-cms-mcp-server/issues"
+  },
+  "homepage": "https://github.com/kuklaph/cascade-cms-mcp-server#readme",
   "type": "module",
-  "main": "src/index.ts",
+  "main": "dist/index.js",
+  "bin": {
+    "cascade-cms-mcp-server": "dist/index.js"
+  },
+  "files": ["dist", "README.md", "LICENSE"],
   "scripts": {
     "start": "bun run src/index.ts",
     "dev": "bun --watch run src/index.ts",
     "test": "bun test",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build": "tsc -p tsconfig.build.json",
+    "smoke:node": "node scripts/smoke-node.mjs",
+    "prepublishOnly": "bun test && bun run build && bun run smoke:node"
   },
   "engines": {
+    "node": ">=18",
     "bun": ">=1.0.0"
   },
   "dependencies": {
