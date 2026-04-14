@@ -6,14 +6,46 @@ Built in TypeScript on [Bun](https://bun.sh). **25 tools** across 9 cohorts (CRU
 
 ## Requirements
 
-- **End users**: Node 18+ (for `npx`) **or** Bun 1.0+ (for `bunx`). Either works — `bunx` is recommended if you already have Bun for faster install.
+- **Claude Code plugin users**: Node 18+ (Claude Code spawns the MCP server via `npx`).
+- **MCP client config users** (Claude Desktop, Cline, etc.): Node 18+ (for `npx`) **or** Bun 1.0+ (for `bunx`). Either works — `bunx` is faster if you already have Bun.
 - **Contributors**: Bun 1.0+ for the dev toolchain (tests, watch mode) — see [Development](#development).
 - A Cascade CMS instance (v8.1.1+) with an API key.
-- An MCP client (Claude Desktop, Cline, MCP Inspector, or any compliant agent).
+- An MCP client (Claude Code, Claude Desktop, Cline, MCP Inspector, or any compliant agent).
 
 ## Quick Start
 
-Add a server entry to your MCP client's config. Example for **Claude Desktop** (Windows, macOS — Anthropic does not ship Claude Desktop for Linux; on Linux use [Claude Code](#claude-code), Cline, or another MCP-compatible client).
+Pick whichever path matches your client:
+
+### Option A: Claude Code Plugin (auto-registers the MCP server)
+
+If you use [Claude Code](https://docs.claude.com/en/docs/claude-code), install this repo as a plugin. The bundled `.claude-plugin/plugin.json` + `.mcp.json` auto-register the MCP server on install — no manual config file edit.
+
+1. Add this repo as a plugin source in Claude Code and install the `cascade-cms` plugin. The exact command varies by Claude Code version — see the [plugin documentation](https://docs.claude.com/en/docs/claude-code/plugins).
+2. Set credentials in your **shell environment** (not a JSON config — Claude Code plugins read env vars from your shell at subprocess spawn):
+
+   **POSIX** (add to `~/.bashrc`, `~/.zshrc`, or your shell's rc file):
+   ```bash
+   export CASCADE_API_KEY="your_api_key_here"
+   export CASCADE_URL="https://yourorg.cascadecms.com/api/v1/"
+   ```
+
+   **Windows PowerShell** (add to `$PROFILE`):
+   ```powershell
+   $env:CASCADE_API_KEY = "your_api_key_here"
+   $env:CASCADE_URL = "https://yourorg.cascadecms.com/api/v1/"
+   ```
+
+3. Make sure the env vars are set in the shell session that launches Claude Code. If Claude Code was already running when you set them, close it, open a new terminal so the updated env loads, then relaunch Claude Code from that terminal. Tools become available as `mcp__plugin_cascade-cms_cascade-cms__cascade_<op>`.
+
+> **Credentials note**: If `CASCADE_API_KEY` or `CASCADE_URL` is unset when Claude Code spawns the server, the server exits fast with a clear error and tools will appear non-functional. Verify without leaking the secret to shell history:
+>
+> **POSIX**: `[ -n "$CASCADE_API_KEY" ] && echo "set" || echo "UNSET"`
+>
+> **PowerShell**: `if ($env:CASCADE_API_KEY) { "set" } else { "UNSET" }`
+
+### Option B: MCP Client Config (Claude Desktop, Cline, and other MCP clients)
+
+Add a server entry to your MCP client's config. Example for **Claude Desktop** (Windows, macOS — Anthropic does not ship Claude Desktop for Linux; on Linux use Claude Code via Option A, Cline, or another MCP-compatible client).
 
 Edit `claude_desktop_config.json`:
 
@@ -44,11 +76,11 @@ Restart the client. `bunx` fetches the package on first run and caches it (recom
 "args": ["-y", "cascade-cms-mcp-server"]
 ```
 
-Both resolve to the same entry point (`dist/index.js`) via the package's `bin`; choose whichever is already on your machine.
+Both resolve to the same entry point (`dist/index.js`) via the package's `bin`; choose whichever is already on your machine. Credentials go **inline in the `env` block** (easier than Option A's shell-env setup) since the MCP client reads them directly from the config file.
 
 ### Environment variables
 
-The MCP client passes these to the server via the `env` block. No `.env` file involved during normal use.
+Whichever path you pick, the same three variables control the server:
 
 | Variable             | Required | Description                                                           |
 | -------------------- | :------: | --------------------------------------------------------------------- |
@@ -66,7 +98,11 @@ The Quick Start snippet above is the canonical form. Restart Claude Desktop afte
 
 ### Claude Code
 
-Option A — project-scoped `.mcp.json` at your repo root:
+Three ways to add this to Claude Code, in order of recommended UX:
+
+**Option 1 — Install as a plugin (recommended)**: See [Option A in Quick Start](#option-a-claude-code-plugin-auto-registers-the-mcp-server). The bundled `.mcp.json` auto-registers everything.
+
+**Option 2 — Project-scoped `.mcp.json`** at your repo root (same shape as the plugin's bundled file, but you manage it directly):
 
 ```json
 {
@@ -85,7 +121,7 @@ Option A — project-scoped `.mcp.json` at your repo root:
 
 Swap `bunx` → `npx` (with `"args": ["-y", "cascade-cms-mcp-server"]`) if you don't have Bun installed.
 
-Option B — `claude mcp add` from the CLI.
+**Option 3 — CLI**: `claude mcp add` with the same command/args/env values.
 
 ### MCP Inspector
 
@@ -431,8 +467,8 @@ For contributors and those wanting to run a local build or modify the server. En
 ### Setup
 
 ```bash
-git clone https://github.com/kuklaph/cascade-cms-mcp-server
-cd cascade-cms-mcp-server
+git clone https://github.com/kuklaph/cascade-cms-mcp
+cd cascade-cms-mcp
 bun install
 ```
 
@@ -459,6 +495,9 @@ node dist/index.js       # Run the built output with Node (after bun run build)
 ### Project Structure
 
 ```
+.claude-plugin/
+  plugin.json           Claude Code plugin manifest (name, metadata)
+.mcp.json               MCP server registration for Claude Code plugin users
 src/
   index.ts              stdio bootstrap (redirects console.* → stderr)
   server.ts             createServer() factory (wires all 9 tool cohorts + 2 resources)
@@ -493,7 +532,36 @@ tests/
 
 ## How It Works
 
-1. The MCP client (Claude Desktop, Cline, etc.) spawns `bunx cascade-cms-mcp-server` (or `npx -y cascade-cms-mcp-server`) as a subprocess, injecting `CASCADE_API_KEY` and `CASCADE_URL` as env vars. The runner resolves the package's `bin` entry to `dist/index.js`, and the `#!/usr/bin/env node` shebang routes execution through Node. The entry point redirects `console.*` to stderr (guards the stdio protocol stream from accidental stdout writes by dependencies), validates config, builds a Cascade client from `cascade-cms-api`, creates an MCP server, registers 25 tools plus 2 resources, and connects over stdio.
+Both install paths converge on the same built `dist/index.js` running under Node. The difference is who registers the MCP server with the client:
+
+```
+ ┌───────────────────────────────┐   ┌───────────────────────────────┐
+ │ Claude Code (plugin)          │   │ Claude Desktop / Cline /      │
+ │                               │   │ other MCP clients             │
+ │ /plugin install cascade-cms   │   │ edit config.json              │
+ │            │                  │   │            │                  │
+ └────────────┼──────────────────┘   └────────────┼──────────────────┘
+              │ auto-registers from               │ manual entry
+              ▼                                   ▼
+     .claude-plugin/plugin.json          "command": "bunx" or "npx"
+     .mcp.json                           "args": ["cascade-cms-mcp-server"]
+     (shipped in the git repo;           (user choice; -y required for npx)
+      pins "command": "npx",
+      "args": ["-y", ...])
+              │                                   │
+              └────────────────┬──────────────────┘
+                               ▼
+            npx -y cascade-cms-mcp-server  /  bunx cascade-cms-mcp-server
+                 (resolves the npm package's bin)
+                               │
+                               ▼
+                 dist/index.js (#!/usr/bin/env node)
+                               │
+                               ▼
+                        Cascade CMS API
+```
+
+1. The MCP client spawns the server subprocess. For plugin users, Claude Code reads `.mcp.json` (shipped in the plugin) and runs `npx -y cascade-cms-mcp-server` with env vars from the user's shell. For MCP-config users, the client runs `bunx cascade-cms-mcp-server` (or `npx -y`) with env vars from the config's `env` block. Either way, the runner resolves the package's `bin` entry to `dist/index.js`, and the `#!/usr/bin/env node` shebang routes execution through Node. The entry point redirects `console.*` to stderr (guards the stdio protocol stream from accidental stdout writes by dependencies), validates config, builds a Cascade client from `cascade-cms-api`, creates an MCP server, registers 25 tools plus 2 resources, and connects over stdio.
 2. Each cohort file (`src/tools/<cohort>.ts`) calls `registerCascadeTool(server, config)` for each of its tools.
 3. The helper wraps the tool handler with: start timer → Zod input validation → delegate to the Cascade client method → format response (markdown or JSON) → catch + translate errors to MCP `isError: true` results → emit a stderr audit record (`ok`/`error` + duration + redacted error text).
 4. Paginated tools (`cascade_search`, `cascade_list_messages`, `cascade_read_audits`) extract `limit`/`offset` from input, call Cascade for the full result set, and slice client-side via `paginatedHandler`.

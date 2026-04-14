@@ -1,0 +1,12 @@
+{
+  "name": "cascade-cms",
+  "version": "0.1.0",
+  "description": "Cascade CMS MCP server — 25 tools across CRUD, search, workflow, messaging, audits, and publish for reading, editing, and managing Cascade CMS content via Claude.",
+  "author": {
+    "name": "Philip Kukla"
+  },
+  "homepage": "https://github.com/kuklaph/cascade-cms-mcp#readme",
+  "repository": "https://github.com/kuklaph/cascade-cms-mcp",
+  "license": "MIT",
+  "keywords": ["mcp", "cascade-cms", "cms", "claude-plugin"]
+}
