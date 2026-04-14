@@ -1,0 +1,26 @@
+{
+  "name": "cascade-cms-marketplace",
+  "owner": {
+    "name": "kuklaph"
+  },
+  "metadata": {
+    "description": "Marketplace hosting the Cascade CMS MCP server plugin for Claude Code",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "cascade-cms",
+      "source": "./",
+      "description": "Cascade CMS MCP server — 25 tools across CRUD, search, workflow, messaging, audits, and publish for reading, editing, and managing Cascade CMS content via Claude.",
+      "version": "0.1.0",
+      "author": {
+        "name": "Philip Kukla"
+      },
+      "license": "MIT",
+      "homepage": "https://github.com/kuklaph/cascade-cms-mcp#readme",
+      "repository": "https://github.com/kuklaph/cascade-cms-mcp",
+      "keywords": ["mcp", "cascade-cms", "cms", "claude-plugin"],
+      "category": "integrations"
+    }
+  ]
+}
