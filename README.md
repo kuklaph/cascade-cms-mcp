@@ -2,7 +2,7 @@
 
 An MCP (Model Context Protocol) server that exposes the Cascade CMS REST API to LLMs and agents. Wraps the [cascade-cms-api](https://github.com/kuklaph/cascade-cms-api) library and provides Zod input validation, markdown/JSON response formatting, and actionable error messages for AI consumers.
 
-Built in TypeScript on [Bun](https://bun.sh). **25 tools** across 9 cohorts (CRUD, search, sites, access rights, workflow, messages, check in/out, audits/preferences, publish) plus **2 MCP resources** (`cascade://entity-types`, `cascade://sites`). Paginated results on `cascade_search`, `cascade_list_messages`, `cascade_read_audits`. Every tool invocation emits a single-line audit record to stderr.
+Built in TypeScript on [Bun](https://bun.sh). **26 tools**: 25 Cascade tools across 9 cohorts (CRUD, search, sites, access rights, workflow, messages, check in/out, audits/preferences, publish) plus 1 retrieval tool (`cascade_read_response`) for accessing oversize responses by handle. **2 MCP resources** (`cascade://entity-types`, `cascade://sites`). Paginated results on `cascade_search`, `cascade_list_messages`, `cascade_read_audits`. Oversize responses are stored in an in-memory LRU cache and accessible by handle. Every tool invocation emits a single-line audit record to stderr.
 
 ## Requirements
 
@@ -164,7 +164,7 @@ bunx @modelcontextprotocol/inspector --cli bunx cascade-cms-mcp-server --method 
 
 Every invocation above works with `npx` (with `-y` on the package) if Bun isn't installed. Both tools resolve the published package identically.
 
-The Inspector will list all 25 tools and 2 resources, and let you invoke them interactively.
+The Inspector will list all 26 tools and 2 resources, and let you invoke them interactively.
 
 ## Audit Logging
 
@@ -181,7 +181,9 @@ Claude Desktop and similar clients typically route server stderr to a log file; 
 
 ## Tool Catalog
 
-Every tool accepts an optional `response_format` parameter (`"markdown"` or `"json"`, default `"markdown"`). Every tool returns a Cascade `OperationResult` wrapped in MCP `content` + `structuredContent`. The `structuredContent` carries the raw Cascade response (primitives are wrapped as `{ value: X }`; null/empty as `{}`). The `content` text is truncated at 25,000 characters in both formats — read `structuredContent` for guaranteed full data.
+Every tool accepts an optional `response_format` parameter (`"markdown"` or `"json"`, default `"markdown"`). Every tool returns a Cascade `OperationResult` wrapped in MCP `content` + `structuredContent`. The `structuredContent` carries the raw Cascade response (primitives are wrapped as `{ value: X }`; null/empty as `{}`).
+
+**Oversize handling**: When a tool's rendered text exceeds 25,000 characters, the server stores the full payload in an in-memory cache, returns a 20,000-char preview + handle in `content[0].text`, and adds a `_cache` envelope (`{handle, bytes_total, bytes_returned, tool}`) to `structuredContent`. Use [`cascade_read_response`](#response-cache) to fetch additional bytes by handle and offset. See [Response Cache](#response-cache) for the full pattern.
 
 **MCP annotations**: Each tool also sets `destructiveHint`, `idempotentHint`, and `openWorldHint` per MCP conventions. Tools marked `destructiveHint: true` are `cascade_remove`, `cascade_delete_message`, and `cascade_publish_unpublish`. Inspect tool metadata via the [MCP Inspector](https://github.com/modelcontextprotocol/inspector) for full annotation details.
 
@@ -189,7 +191,7 @@ Every tool accepts an optional `response_format` parameter (`"markdown"` or `"js
 
 | Tool             | Read-only | Description                                                                                    |
 | ---------------- | :-------: | ---------------------------------------------------------------------------------------------- |
-| `cascade_read`   |    Yes    | Read an asset by identifier (id or path + type)                                                |
+| `cascade_read`   |    Yes    | Read an asset by identifier (id or path + type). Accepts `response_detail: "summary" \| "full"` (default `full`) — `summary` strips heavy fields like `xhtml`, `structuredData`, file `data`, `pageConfigurations`. |
 | `cascade_create` |    No     | Create a new asset (strict schemas for page/file/folder/block/symlink; passthrough for others) |
 | `cascade_edit`   |    No     | Edit an existing asset                                                                         |
 | `cascade_remove` |    No     | Delete an asset (with optional workflow + delete parameters)                                   |
@@ -255,6 +257,12 @@ Every tool accepts an optional `response_format` parameter (`"markdown"` or `"js
 | --------------------------- | :-------: | ---------------------------------------------------------------------------- |
 | `cascade_publish_unpublish` |    No     | Publish an asset (or unpublish with `unpublish: true` in publishInformation) |
 
+### Response Cache
+
+| Tool                     | Read-only | Description                                                                                  |
+| ------------------------ | :-------: | -------------------------------------------------------------------------------------------- |
+| `cascade_read_response`  |    Yes    | Retrieve a slice of an oversize cached response by handle (`{handle, offset?, length?}`). See [Response Cache](#response-cache) for the full pattern. |
+
 ## Resources
 
 Resources expose URI-addressable reference data that agents can fetch via MCP `resources/read` without invoking a tool.
@@ -312,7 +320,75 @@ while (true) {
 - **If you only need top matches** (e.g., "first file that mentions X"), stop as soon as the found item appears — don't exhaust the set.
 - **For complete date-ranged audit exports**, loop until `has_more: false` to guarantee no gaps.
 
-Pagination is performed client-side by the MCP layer: Cascade's REST endpoints always return full result sets, and this server slices them before returning. Full data is always available in `structuredContent` if the agent prefers to process it in one pass (with the usual 25,000-char text truncation applied to `content`).
+Pagination is performed client-side by the MCP layer: Cascade's REST endpoints always return full result sets, and this server slices them before returning. Full data is always available in `structuredContent` if the agent prefers to process it in one pass; if the rendered text exceeds 25,000 characters, the [Response Cache](#response-cache) kicks in and the agent can retrieve additional bytes via `cascade_read_response`.
+
+## Response Cache
+
+When a tool's rendered response text exceeds 25,000 characters, the server stores the full payload in an in-memory LRU cache and returns:
+
+- **`content[0].text`** — a 20,000-char preview followed by a marker naming the handle and the retrieval tool
+- **`structuredContent._cache`** — `{handle, bytes_total, bytes_returned, tool}`, where `tool` is always `"cascade_read_response"`
+- **`structuredContent`** — the original raw response object, untouched alongside `_cache` (machine-readable clients see everything)
+
+The marker text looks like:
+
+```
+---
+[Preview truncated at 20000 of 145000 chars. Full response retained as handle h_550e8400-e29b-41d4-a716-446655440000. To retrieve more: call cascade_read_response({handle, offset, length}). Slice with offset:20000 to continue. See structuredContent._cache for machine-readable metadata.]
+```
+
+### Retrieving more bytes
+
+Call `cascade_read_response` with the handle plus an offset and length:
+
+```json
+{
+  "tool": "cascade_read_response",
+  "arguments": { "handle": "h_550e8400-...", "offset": 20000, "length": 25000 }
+}
+```
+
+Returns:
+
+```json
+{
+  "success": true,
+  "handle": "h_550e8400-...",
+  "bytes_total": 145000,
+  "offset": 20000,
+  "bytes_returned": 25000,
+  "has_more": true,
+  "next_offset": 45000
+}
+```
+
+The slice text itself appears in `content[0].text` (raw, not JSON-fenced). `length` is capped at 25,000 chars per call; iterate via `next_offset` until `has_more: false`.
+
+### Cache policy
+
+| Setting              | Value           | Notes                                                            |
+| -------------------- | --------------- | ---------------------------------------------------------------- |
+| Eviction             | LRU             | Last 10 oversize responses retained; recency refreshed on `get`  |
+| Per-entry cap        | 2 MB            | Larger payloads store a "[entry too large]" marker by the handle |
+| Total memory         | ~20 MB max      | Bounded by the two caps above                                    |
+| TTL                  | None            | Process-scoped; cache dies when the stdio server exits           |
+| Handle format        | `h_<uuid>` (38 chars) | Cryptographically random via `crypto.randomUUID()`         |
+
+If a handle is missing or evicted, `cascade_read_response` returns `isError: true` with a message naming the handle and suggesting to re-run the originating tool.
+
+### Avoiding the cache up front
+
+For `cascade_read`, set `response_detail: "summary"` to project out heavy fields (`xhtml`, `structuredData`, `pageConfigurations`, file `data`/`text`) before rendering. The lean projection keeps `id`, `name`, `path`, `type`, `lastModifiedDate`, and `metadata`. Useful for discovery passes where you just need to know an asset exists or what it's named.
+
+```json
+{
+  "tool": "cascade_read",
+  "arguments": {
+    "identifier": { "id": "abc123", "type": "page" },
+    "response_detail": "summary"
+  }
+}
+```
 
 ## Example Tool Invocations
 
@@ -447,9 +523,9 @@ Add `response_format: "json"` to any call:
 ## Response Formats
 
 - `response_format: "markdown"` (default) — human/LLM-readable markdown with key fields highlighted. Best for agent reasoning.
-- `response_format: "json"` — pretty-printed JSON of the raw Cascade response. Best for programmatic chaining or when the markdown view truncates.
+- `response_format: "json"` — pretty-printed JSON of the raw Cascade response. Best for programmatic chaining.
 
-The raw Cascade response object is passed through to `structuredContent` regardless of format (null/empty is wrapped as `{}`; primitives as `{ value: X }`). Read `structuredContent` when you need guaranteed full data — text content is truncated at 25,000 characters in both markdown and JSON modes.
+The raw Cascade response object is always passed through to `structuredContent` (null/empty is wrapped as `{}`; primitives as `{ value: X }`). When a rendered response exceeds 25,000 characters, the [Response Cache](#response-cache) intercepts it: `content[0].text` becomes a 20,000-char preview + handle, `structuredContent` keeps the full raw object plus a `_cache` envelope, and the agent can fetch additional bytes via `cascade_read_response`.
 
 ## Asset Input Schemas
 
@@ -479,7 +555,7 @@ Optional: copy `.env.example` to `.env` and fill in credentials for local smoke 
 The dev loop requires Bun (scripts shell out to `bun run`). End users running the published package only need Node 18+.
 
 ```bash
-bun test                 # Run all tests (238 tests across 21 files)
+bun test                 # Run all tests (~290 tests across 23 files)
 bun run typecheck        # Type-check with tsc --noEmit
 bun run build            # Compile src/ → dist/ via tsconfig.build.json
 bun run smoke:node       # Boot dist/index.js with Node, verify startup banner
@@ -502,18 +578,19 @@ node dist/index.js       # Run the built output with Node (after bun run build)
                         /plugin marketplace add
 src/
   index.ts              stdio bootstrap (redirects console.* → stderr)
-  server.ts             createServer() factory (wires all 9 tool cohorts + 2 resources)
+  server.ts             createServer() factory (wires all 9 tool cohorts + retrieval tool + 2 resources)
   client.ts             Cascade API client factory
   config.ts             env validation
   errors.ts             error translation to MCP format (+ exported redactSecrets)
-  formatting.ts         markdown/JSON response formatting
-  constants.ts          character limit, server name/version
+  formatting.ts         markdown/JSON response formatting + oversize handle minting
+  constants.ts          character limit, preview limit, cache caps, server name/version
   audit.ts              stderr audit-log line per invocation (redacts + sanitizes)
   pagination.ts         client-side pagination helper + paginatedHandler factory
+  cache.ts              in-memory LRU response cache for oversize payloads
   resources.ts          MCP resource registrations (cascade://entity-types, cascade://sites)
   tools/
-    helper.ts           registerCascadeTool shared helper
-    crud.ts             read, create, edit, remove, move, copy
+    helper.ts           registerCascadeTool shared helper + CascadeDeps interface
+    crud.ts             read, create, edit, remove, move, copy (read supports response_detail)
     search.ts           search (paginated)
     sites.ts            list_sites, site_copy
     access.ts           read/edit_access_rights
@@ -522,10 +599,11 @@ src/
     checkout.ts         check_out, check_in
     audits.ts           read_audits (paginated), read/edit_preference
     publish.ts          publish_unpublish
+    readResponse.ts     cascade_read_response (slice retrieval by handle)
   schemas/
-    common.ts           Identifier, EntityType, Path, ResponseFormat
+    common.ts           Identifier, EntityType, Path, ResponseFormat, ResponseDetail
     assets.ts           Discriminated asset union + passthrough fallback
-    requests.ts         25 Zod request schemas (+ PaginationFields mixin)
+    requests.ts         26 Zod request schemas (25 Cascade + 1 retrieval, + PaginationFields mixin)
 tests/
   unit/                 mirrors src/ (includes audit, pagination, resources)
   integration/          end-to-end server wiring tests
@@ -562,11 +640,11 @@ Both install paths converge on the same built `dist/index.js` running under Node
                         Cascade CMS API
 ```
 
-1. The MCP client spawns the server subprocess. For plugin users, Claude Code reads the `mcpServers` field inline in `plugin.json` and runs `npx -y cascade-cms-mcp-server` with env vars from the user's shell. For MCP-config users, the client runs `bunx cascade-cms-mcp-server` (or `npx -y`) with env vars from the config's `env` block. Either way, the runner resolves the package's `bin` entry to `dist/index.js`, and the `#!/usr/bin/env node` shebang routes execution through Node. The entry point redirects `console.*` to stderr (guards the stdio protocol stream from accidental stdout writes by dependencies), validates config, builds a Cascade client from `cascade-cms-api`, creates an MCP server, registers 25 tools plus 2 resources, and connects over stdio.
-2. Each cohort file (`src/tools/<cohort>.ts`) calls `registerCascadeTool(server, config)` for each of its tools.
+1. The MCP client spawns the server subprocess. For plugin users, Claude Code reads the `mcpServers` field inline in `plugin.json` and runs `npx -y cascade-cms-mcp-server` with env vars from the user's shell. For MCP-config users, the client runs `bunx cascade-cms-mcp-server` (or `npx -y`) with env vars from the config's `env` block. Either way, the runner resolves the package's `bin` entry to `dist/index.js`, and the `#!/usr/bin/env node` shebang routes execution through Node. The entry point redirects `console.*` to stderr (guards the stdio protocol stream from accidental stdout writes by dependencies), validates config, builds a Cascade client from `cascade-cms-api`, creates an MCP server, registers 25 Cascade tools + the `cascade_read_response` retrieval tool + 2 resources, and connects over stdio.
+2. Each cohort file (`src/tools/<cohort>.ts`) calls `registerCascadeTool(server, config, deps)` for each of its tools, where `deps` carries the shared response cache.
 3. The helper wraps the tool handler with: start timer → Zod input validation → delegate to the Cascade client method → format response (markdown or JSON) → catch + translate errors to MCP `isError: true` results → emit a stderr audit record (`ok`/`error` + duration + redacted error text).
 4. Paginated tools (`cascade_search`, `cascade_list_messages`, `cascade_read_audits`) extract `limit`/`offset` from input, call Cascade for the full result set, and slice client-side via `paginatedHandler`.
-5. Truncation at 25,000 characters prevents oversized text responses. The raw data stays available via `structuredContent` regardless of format.
+5. When rendered text exceeds 25,000 characters, `formatResponse` mints a handle, stores the full text in the in-memory LRU cache, and returns a 20,000-char preview + handle. The companion `cascade_read_response` tool retrieves slices by handle. See [Response Cache](#response-cache).
 6. Resources (`cascade://entity-types`, `cascade://sites`) are registered alongside tools on the same server. Dynamic resource errors return a JSON error envelope so `application/json` parsing stays reliable.
 
 ## Security Notes

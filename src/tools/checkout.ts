@@ -14,6 +14,7 @@ import type { CascadeClient } from "../client.js";
 import {
   registerCascadeTool,
   buildCascadeToolDescription,
+  type CascadeDeps,
 } from "./helper.js";
 import {
   CheckOutRequestSchema,
@@ -23,6 +24,7 @@ import {
 export function registerCheckoutTools(
   server: McpServer,
   client: CascadeClient,
+  deps?: CascadeDeps,
 ): void {
   registerCascadeTool(server, {
     name: "cascade_check_out",
@@ -65,7 +67,7 @@ Error Handling:
       openWorldHint: true,
     },
     handler: (input) => client.checkOut(input as unknown as Types.CheckOutRequest),
-  });
+  }, deps);
 
   registerCascadeTool(server, {
     name: "cascade_check_in",
@@ -106,5 +108,5 @@ Error Handling:
       openWorldHint: true,
     },
     handler: (input) => client.checkIn(input as unknown as Types.CheckInRequest),
-  });
+  }, deps);
 }

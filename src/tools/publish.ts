@@ -13,12 +13,14 @@ import type { CascadeClient } from "../client.js";
 import {
   registerCascadeTool,
   buildCascadeToolDescription,
+  type CascadeDeps,
 } from "./helper.js";
 import { PublishUnpublishRequestSchema } from "../schemas/requests.js";
 
 export function registerPublishTools(
   server: McpServer,
   client: CascadeClient,
+  deps?: CascadeDeps,
 ): void {
   registerCascadeTool(server, {
     name: "cascade_publish_unpublish",
@@ -66,5 +68,5 @@ Error Handling:
       openWorldHint: true,
     },
     handler: (input) => client.publishUnpublish(input as unknown as Types.PublishUnpublishRequest),
-  });
+  }, deps);
 }

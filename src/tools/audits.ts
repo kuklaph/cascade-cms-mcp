@@ -15,6 +15,7 @@ import type { CascadeClient } from "../client.js";
 import {
   registerCascadeTool,
   buildCascadeToolDescription,
+  type CascadeDeps,
 } from "./helper.js";
 import {
   ReadAuditsRequestSchema,
@@ -26,6 +27,7 @@ import { paginatedHandler } from "../pagination.js";
 export function registerAuditTools(
   server: McpServer,
   client: CascadeClient,
+  deps?: CascadeDeps,
 ): void {
   registerCascadeTool(server, {
     name: "cascade_read_audits",
@@ -91,7 +93,7 @@ Error Handling:
       (req) => client.readAudits(req as unknown as Types.ReadAuditsRequest),
       "audits",
     ),
-  });
+  }, deps);
 
   registerCascadeTool(server, {
     name: "cascade_read_preferences",
@@ -130,7 +132,7 @@ Error Handling:
       openWorldHint: true,
     },
     handler: (input) => client.readPreferences(input as unknown as Types.ReadPreferencesRequest),
-  });
+  }, deps);
 
   registerCascadeTool(server, {
     name: "cascade_edit_preference",
@@ -169,5 +171,5 @@ Error Handling:
       openWorldHint: true,
     },
     handler: (input) => client.editPreference(input as unknown as Types.EditPreferenceRequest),
-  });
+  }, deps);
 }

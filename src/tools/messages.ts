@@ -16,6 +16,7 @@ import type { CascadeClient } from "../client.js";
 import {
   registerCascadeTool,
   buildCascadeToolDescription,
+  type CascadeDeps,
 } from "./helper.js";
 import {
   ListSubscribersRequestSchema,
@@ -28,6 +29,7 @@ import { paginatedHandler } from "../pagination.js";
 export function registerMessageTools(
   server: McpServer,
   client: CascadeClient,
+  deps?: CascadeDeps,
 ): void {
   registerCascadeTool(server, {
     name: "cascade_list_subscribers",
@@ -69,7 +71,7 @@ Error Handling:
       openWorldHint: true,
     },
     handler: (input) => client.listSubscribers(input as unknown as Types.ListSubscribersRequest),
-  });
+  }, deps);
 
   registerCascadeTool(server, {
     name: "cascade_list_messages",
@@ -125,7 +127,7 @@ Error Handling:
       (req) => client.listMessages(req as unknown as Types.ListMessagesRequest),
       "messages",
     ),
-  });
+  }, deps);
 
   registerCascadeTool(server, {
     name: "cascade_mark_message",
@@ -165,7 +167,7 @@ Error Handling:
       openWorldHint: true,
     },
     handler: (input) => client.markMessage(input as unknown as Types.MarkMessageRequest),
-  });
+  }, deps);
 
   registerCascadeTool(server, {
     name: "cascade_delete_message",
@@ -202,5 +204,5 @@ Error Handling:
       openWorldHint: true,
     },
     handler: (input) => client.deleteMessage(input as unknown as Types.DeleteMessageRequest),
-  });
+  }, deps);
 }

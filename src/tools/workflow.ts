@@ -17,6 +17,7 @@ import type { CascadeClient } from "../client.js";
 import {
   registerCascadeTool,
   buildCascadeToolDescription,
+  type CascadeDeps,
 } from "./helper.js";
 import {
   ReadWorkflowSettingsRequestSchema,
@@ -28,6 +29,7 @@ import {
 export function registerWorkflowTools(
   server: McpServer,
   client: CascadeClient,
+  deps?: CascadeDeps,
 ): void {
   registerCascadeTool(server, {
     name: "cascade_read_workflow_settings",
@@ -76,7 +78,7 @@ Error Handling:
       openWorldHint: true,
     },
     handler: (input) => client.readWorkflowSettings(input as unknown as Types.ReadWorkflowSettingsRequest),
-  });
+  }, deps);
 
   registerCascadeTool(server, {
     name: "cascade_edit_workflow_settings",
@@ -122,7 +124,7 @@ Error Handling:
       openWorldHint: true,
     },
     handler: (input) => client.editWorkflowSettings(input as unknown as Types.EditWorkflowSettingsRequest),
-  });
+  }, deps);
 
   registerCascadeTool(server, {
     name: "cascade_read_workflow_information",
@@ -173,7 +175,7 @@ Error Handling:
       openWorldHint: true,
     },
     handler: (input) => client.readWorkflowInformation(input as unknown as Types.ReadWorkflowInformationRequest),
-  });
+  }, deps);
 
   registerCascadeTool(server, {
     name: "cascade_perform_workflow_transition",
@@ -212,5 +214,5 @@ Error Handling:
       openWorldHint: true,
     },
     handler: (input) => client.performWorkflowTransition(input as unknown as Types.PerformWorkflowTransitionRequest),
-  });
+  }, deps);
 }

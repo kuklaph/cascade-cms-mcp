@@ -13,6 +13,7 @@ import type { CascadeClient } from "../client.js";
 import {
   registerCascadeTool,
   buildCascadeToolDescription,
+  type CascadeDeps,
 } from "./helper.js";
 import { SearchRequestSchema } from "../schemas/requests.js";
 import { paginatedHandler } from "../pagination.js";
@@ -20,6 +21,7 @@ import { paginatedHandler } from "../pagination.js";
 export function registerSearchTools(
   server: McpServer,
   client: CascadeClient,
+  deps?: CascadeDeps,
 ): void {
   registerCascadeTool(server, {
     name: "cascade_search",
@@ -80,5 +82,5 @@ Error Handling:
       (req) => client.search(req as unknown as Types.SearchRequest),
       "matches",
     ),
-  });
+  }, deps);
 }

@@ -1,6 +1,7 @@
 import { describe, test, expect } from "bun:test";
 import { formatResponse, type ResponseFormat } from "../../src/formatting.js";
-import { CHARACTER_LIMIT } from "../../src/constants.js";
+import { createResponseCache } from "../../src/cache.js";
+import { CHARACTER_LIMIT, PREVIEW_LIMIT } from "../../src/constants.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
 /** Narrow the first content block to a text block (TS-safe accessor). */
@@ -149,5 +150,166 @@ describe("formatResponse", () => {
         expect(out.content[0]?.type).toBe("text");
       }
     }
+  });
+
+  // -------------------------------------------------------------------------
+  // Oversize response → handle minting (cache provided)
+  // -------------------------------------------------------------------------
+
+  /** Build a result whose markdown renders well over CHARACTER_LIMIT. */
+  function makeOversizeMatches(n: number) {
+    return {
+      success: true,
+      matches: Array.from({ length: n }, (_, i) => ({
+        id: "id-" + i,
+        type: "page",
+        path: { path: "/p/" + i },
+      })),
+    };
+  }
+
+  test("should cap preview text near PREVIEW_LIMIT when cache provided and result oversize (markdown)", () => {
+    const cache = createResponseCache();
+    const big = makeOversizeMatches(3000);
+
+    const out = formatResponse(big, "markdown", "cascade_search", undefined, {
+      cache,
+    });
+
+    const text = firstText(out);
+    expect(text.length).toBeLessThanOrEqual(PREVIEW_LIMIT + 600);
+    expect(text).toContain("cascade_read_response");
+    expect(text).toMatch(/h_[a-z0-9-]+/);
+  });
+
+  test("should include the same handle in text and in structuredContent._cache", () => {
+    const cache = createResponseCache();
+    const big = makeOversizeMatches(3000);
+
+    const out = formatResponse(big, "markdown", "cascade_search", undefined, {
+      cache,
+    });
+
+    const text = firstText(out);
+    const match = text.match(/h_[a-z0-9-]+/);
+    expect(match).not.toBeNull();
+    const handleInText = match![0];
+
+    const structured = out.structuredContent as Record<string, unknown>;
+    const envelope = structured._cache as Record<string, unknown>;
+    expect(envelope.handle).toBe(handleInText);
+  });
+
+  test("should set _cache.bytes_total to the rendered fullText length when oversize", () => {
+    const cache = createResponseCache();
+    const big = makeOversizeMatches(3000);
+
+    const out = formatResponse(big, "markdown", "cascade_search", undefined, {
+      cache,
+    });
+
+    const structured = out.structuredContent as Record<string, unknown>;
+    const envelope = structured._cache as Record<string, unknown>;
+
+    // Retrieve the cached full text through the cache to confirm lengths line up.
+    const handle = envelope.handle as string;
+    const entry = cache.get(handle)!;
+    expect(envelope.bytes_total).toBe(entry.fullText.length);
+  });
+
+  test("should set _cache.bytes_returned to PREVIEW_LIMIT when oversize", () => {
+    const cache = createResponseCache();
+    const big = makeOversizeMatches(3000);
+
+    const out = formatResponse(big, "markdown", "cascade_search", undefined, {
+      cache,
+    });
+
+    const structured = out.structuredContent as Record<string, unknown>;
+    const envelope = structured._cache as Record<string, unknown>;
+    expect(envelope.bytes_returned).toBe(PREVIEW_LIMIT);
+  });
+
+  test("should set _cache.tool to 'cascade_read_response' when minting handle", () => {
+    const cache = createResponseCache();
+    const big = makeOversizeMatches(3000);
+
+    const out = formatResponse(big, "markdown", "cascade_search", undefined, {
+      cache,
+    });
+
+    const structured = out.structuredContent as Record<string, unknown>;
+    const envelope = structured._cache as Record<string, unknown>;
+    expect(envelope.tool).toBe("cascade_read_response");
+  });
+
+  test("should retain all original keys in structuredContent alongside _cache envelope", () => {
+    const cache = createResponseCache();
+    const big = makeOversizeMatches(3000);
+
+    const out = formatResponse(big, "markdown", "cascade_search", undefined, {
+      cache,
+    });
+
+    const structured = out.structuredContent as Record<string, unknown>;
+    expect(structured.success).toBe(true);
+    expect(Array.isArray(structured.matches)).toBe(true);
+    expect((structured.matches as unknown[]).length).toBe(3000);
+    expect(structured._cache).toBeDefined();
+  });
+
+  test("should fall back to legacy truncation marker when no cache is provided (back-compat)", () => {
+    const big = makeOversizeMatches(3000);
+
+    const out = formatResponse(big, "markdown", "cascade_search"); // no options
+
+    const text = firstText(out);
+    expect(text).toContain("truncated");
+    expect(text).not.toContain("cascade_read_response");
+    const structured = out.structuredContent as Record<string, unknown>;
+    expect(structured._cache).toBeUndefined();
+  });
+
+  test("should not touch cache or add _cache envelope when text fits under CHARACTER_LIMIT", () => {
+    const cache = createResponseCache();
+    const small = { success: true, id: "abc" };
+
+    const sizeBefore = cache.size();
+    const out = formatResponse(small, "markdown", "tool", undefined, { cache });
+    const sizeAfter = cache.size();
+
+    expect(sizeAfter).toBe(sizeBefore);
+    const structured = out.structuredContent as Record<string, unknown>;
+    expect(structured._cache).toBeUndefined();
+  });
+
+  test("should mint handle for oversize JSON when cache provided", () => {
+    const cache = createResponseCache();
+    const big = makeOversizeMatches(3000);
+
+    const out = formatResponse(big, "json", "cascade_search", undefined, {
+      cache,
+    });
+
+    const text = firstText(out);
+    expect(text).toContain("cascade_read_response");
+    expect(text).toMatch(/h_[a-z0-9-]+/);
+    const structured = out.structuredContent as Record<string, unknown>;
+    expect(structured._cache).toBeDefined();
+  });
+
+  test("should not mint a handle for null or undefined results even when cache is provided", () => {
+    const cache = createResponseCache();
+
+    const outNull = formatResponse(null, "markdown", "tool", undefined, {
+      cache,
+    });
+    const outUndef = formatResponse(undefined, "json", "tool", undefined, {
+      cache,
+    });
+
+    expect(outNull.structuredContent).toEqual({});
+    expect(outUndef.structuredContent).toEqual({});
+    expect(cache.size()).toBe(0);
   });
 });

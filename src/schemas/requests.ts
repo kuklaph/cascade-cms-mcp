@@ -1,5 +1,6 @@
 /**
- * Zod schemas for all 25 Cascade CMS MCP tool requests.
+ * Zod schemas for all 26 MCP tool requests (25 Cascade-backed + 1
+ * MCP-native retrieval tool, `cascade_read_response`).
  *
  * Every schema extends a base that includes `response_format` and is strict
  * at the top level unless the upstream shape inherently requires passthrough
@@ -10,9 +11,11 @@ import { z } from "zod";
 import {
   EntityTypeSchema,
   IdentifierSchema,
+  ResponseDetailSchema,
   ResponseFormatSchema,
 } from "./common.js";
 import { AssetInputSchema } from "./assets.js";
+import { CHARACTER_LIMIT } from "../constants.js";
 
 /** Base shared by all request schemas: optional response_format (defaults markdown). */
 const BaseRequestFields = {
@@ -56,6 +59,7 @@ export const ReadRequestSchema = z
     identifier: IdentifierSchema.describe(
       "The asset to read. Provide id + type (preferred) or path + type.",
     ),
+    response_detail: ResponseDetailSchema,
     ...BaseRequestFields,
   })
   .strict();
@@ -585,3 +589,48 @@ export const EditPreferenceRequestSchema = z
   .strict();
 
 export type EditPreferenceInput = z.infer<typeof EditPreferenceRequestSchema>;
+
+/** -------------------------------------------------------------------------
+ * 26. ReadResponseRequest — retrieve a slice of a cached oversize response.
+ *
+ * This is the only MCP-native tool (no Cascade backend). Agents call it with
+ * a handle produced by an oversize tool response to fetch additional bytes.
+ * ------------------------------------------------------------------------ */
+export const ReadResponseRequestSchema = z
+  .object({
+    handle: z
+      .string()
+      .min(1, "handle must not be empty")
+      // Handles are minted as `h_<uuid>` (38 chars). Cap at 64 to bound any
+      // bad input cheaply before the Map lookup runs (defense in depth
+      // against adversarial input wasting CPU/memory on regex passes).
+      .max(64, "handle must be at most 64 characters")
+      .regex(
+        /^h_[0-9a-f-]{1,62}$/,
+        "handle must look like 'h_<hex-uuid>'",
+      )
+      .describe(
+        "REQUIRED: Response handle returned by a previous oversize tool call. Found in structuredContent._cache.handle (e.g. 'h_550e8400-e29b-41d4-a716-446655440000').",
+      ),
+    offset: z
+      .number()
+      .int()
+      .min(0)
+      .default(0)
+      .describe(
+        "Byte offset to start the slice. Default 0. Use the previous call's next_offset to continue iterating.",
+      ),
+    length: z
+      .number()
+      .int()
+      .min(1)
+      .max(CHARACTER_LIMIT)
+      .default(CHARACTER_LIMIT)
+      .describe(
+        `Maximum characters to return in this slice. Default and max ${CHARACTER_LIMIT}. Smaller slices are fine; iterate via next_offset.`,
+      ),
+    ...BaseRequestFields,
+  })
+  .strict();
+
+export type ReadResponseInput = z.infer<typeof ReadResponseRequestSchema>;

@@ -1,7 +1,7 @@
 /**
  * MCP resource registrations for the Cascade CMS server.
  *
- * Resources complement the 25 tools by exposing URI-addressable reference
+ * Resources complement the 26 tools by exposing URI-addressable reference
  * data that agents can fetch without invoking a tool. Two resources are
  * registered:
  *

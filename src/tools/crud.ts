@@ -19,6 +19,7 @@ import type { CascadeClient } from "../client.js";
 import {
   registerCascadeTool,
   buildCascadeToolDescription,
+  type CascadeDeps,
 } from "./helper.js";
 import {
   ReadRequestSchema,
@@ -29,9 +30,81 @@ import {
   CopyRequestSchema,
 } from "../schemas/requests.js";
 
+/**
+ * Fields retained by the "summary" projection on a Cascade read result.
+ *
+ * Keeps only lightweight discovery fields — id, name, path, type, the
+ * lastModifiedDate timestamp, and the metadata block. Everything else on
+ * the asset entity (xhtml body, structuredData, file bytes, page
+ * configurations, velocity/script bodies, etc.) is stripped.
+ */
+const SUMMARY_ALLOWLIST = [
+  "id",
+  "name",
+  "path",
+  "type",
+  "lastModifiedDate",
+  "metadata",
+] as const;
+
+/**
+ * Project a Cascade `read` response down to the summary allowlist.
+ *
+ * The upstream shape is `{success, asset: {<typeKey>: {...}}}` where
+ * `<typeKey>` is exactly one of `page`, `file`, `folder`, `block`,
+ * `template`, etc. This helper projects that entity down to the
+ * allowlisted fields. Returns the original result unchanged when:
+ *   - input isn't an object,
+ *   - `asset` is missing, non-object, or empty,
+ *   - `asset` has more than one key (unfamiliar shape — fail safe),
+ *   - the entity has none of the allowlisted fields (would project to
+ *     an empty object, which is less useful than the original).
+ *
+ * Note: the allowlist (`id, name, path, type, lastModifiedDate, metadata`)
+ * is sized for asset entities like page/file/folder/block. Other Cascade
+ * entity types (user, workflow, transport, etc.) lack most of these
+ * fields; on those, the empty-projection guard returns the original.
+ */
+function summarizeReadResult(raw: unknown): unknown {
+  if (typeof raw !== "object" || raw === null) return raw;
+
+  const result = raw as Record<string, unknown>;
+  const asset = result.asset;
+  if (typeof asset !== "object" || asset === null) return raw;
+
+  const assetRecord = asset as Record<string, unknown>;
+  const typeKeys = Object.keys(assetRecord);
+  // Guard against unfamiliar shapes: if `asset` has 0 or 2+ keys,
+  // we can't safely pick "the entity" — return raw.
+  if (typeKeys.length !== 1) return raw;
+
+  const typeKey = typeKeys[0]!;
+  const entity = assetRecord[typeKey];
+  if (typeof entity !== "object" || entity === null) return raw;
+
+  const entityRecord = entity as Record<string, unknown>;
+  const projected: Record<string, unknown> = {};
+  for (const field of SUMMARY_ALLOWLIST) {
+    if (field in entityRecord) {
+      projected[field] = entityRecord[field];
+    }
+  }
+
+  // If the entity has none of the allowlisted fields (e.g. a user,
+  // workflow, or other entity type without id/name/path), the projection
+  // would be an empty object — less useful than returning the original.
+  if (Object.keys(projected).length === 0) return raw;
+
+  return {
+    ...result,
+    asset: { [typeKey]: projected },
+  };
+}
+
 export function registerCrudTools(
   server: McpServer,
   client: CascadeClient,
+  deps?: CascadeDeps,
 ): void {
   registerCascadeTool(server, {
     name: "cascade_read",
@@ -49,6 +122,7 @@ Args:
       - siteId OR siteName (string): Which site the path belongs to
     - type (string, required): Entity type — one of the 56 EntityTypeString values (page, file, folder, block, template, etc.)
     - recycled (boolean, optional): Read from recycle bin.
+  - response_detail (string, optional): 'full' (default, complete asset) or 'summary' (lean projection keeping only id, name, path, type, lastModifiedDate, metadata; strips xhtml, structuredData, file data, page configurations, and similar heavy fields). Use 'summary' to discover/describe an asset without loading its body.
 
 Returns:
   Cascade OperationResult with the asset body:
@@ -74,8 +148,14 @@ Error Handling:
       idempotentHint: true,
       openWorldHint: true,
     },
-    handler: (input) => client.read(input as unknown as Types.ReadRequest),
-  });
+    handler: async (input) => {
+      const raw = (input ?? {}) as Record<string, unknown>;
+      const detail = raw.response_detail;
+      const { response_detail: _rd, ...rest } = raw;
+      const result = await client.read(rest as unknown as Types.ReadRequest);
+      return detail === "summary" ? summarizeReadResult(result) : result;
+    },
+  }, deps);
 
   registerCascadeTool(server, {
     name: "cascade_create",
@@ -121,7 +201,7 @@ Error Handling:
       openWorldHint: true,
     },
     handler: (input) => client.create(input as unknown as Types.CreateRequest),
-  });
+  }, deps);
 
   registerCascadeTool(server, {
     name: "cascade_edit",
@@ -162,7 +242,7 @@ Error Handling:
       openWorldHint: true,
     },
     handler: (input) => client.edit(input as unknown as Types.EditRequest),
-  });
+  }, deps);
 
   registerCascadeTool(server, {
     name: "cascade_remove",
@@ -207,7 +287,7 @@ Error Handling:
       openWorldHint: true,
     },
     handler: (input) => client.remove(input as unknown as Types.RemoveRequest),
-  });
+  }, deps);
 
   registerCascadeTool(server, {
     name: "cascade_move",
@@ -252,7 +332,7 @@ Error Handling:
       openWorldHint: true,
     },
     handler: (input) => client.move(input as unknown as Types.MoveRequest),
-  });
+  }, deps);
 
   registerCascadeTool(server, {
     name: "cascade_copy",
@@ -297,5 +377,5 @@ Error Handling:
       openWorldHint: true,
     },
     handler: (input) => client.copy(input as unknown as Types.CopyRequest),
-  });
+  }, deps);
 }

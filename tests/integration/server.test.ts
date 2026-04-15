@@ -2,16 +2,22 @@
  * Integration test for the server factory (`createServer`).
  *
  * Verifies that all 9 tool cohorts wire up correctly and produce
- * the expected 25 tools with well-formed names. Also exercises one
+ * the expected 26 tools with well-formed names (25 Cascade-backed +
+ * 1 `cascade_read_response` retrieval tool). Also exercises one
  * end-to-end handler invocation (`cascade_read`) through the real
- * pipeline that `registerCascadeTool` installs on the server.
+ * pipeline that `registerCascadeTool` installs on the server, plus
+ * the oversize-response round-trip through `cascade_read_response`.
  */
 
 import { describe, test, expect, mock } from "bun:test";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { createServer } from "../../src/server.js";
 import { createMockClient } from "../fixtures/mock-client.js";
-import { READ_PAGE_OK } from "../fixtures/cascade-responses.js";
+import {
+  READ_PAGE_OK,
+  READ_PAGE_HUGE,
+} from "../fixtures/cascade-responses.js";
+import { CHARACTER_LIMIT } from "../../src/constants.js";
 
 /**
  * Extract the runtime `_registeredTools` map from an `McpServer`.
@@ -28,7 +34,7 @@ function getRegisteredTools(server: unknown): Record<string, {
   return (server as { _registeredTools: Record<string, any> })._registeredTools;
 }
 
-/** All 25 expected tool names, one per cohort. */
+/** All 26 expected tool names: 25 Cascade-backed tools + 1 retrieval tool. */
 const EXPECTED_TOOL_NAMES = [
   // crud (6)
   "cascade_read",
@@ -64,15 +70,17 @@ const EXPECTED_TOOL_NAMES = [
   "cascade_edit_preference",
   // publish (1)
   "cascade_publish_unpublish",
+  // response cache retrieval (1)
+  "cascade_read_response",
 ];
 
 describe("createServer (server factory)", () => {
-  test("registers exactly 25 tools", () => {
+  test("registers exactly 26 tools", () => {
     const client = createMockClient();
     const server = createServer(client);
     const tools = getRegisteredTools(server);
 
-    expect(Object.keys(tools)).toHaveLength(25);
+    expect(Object.keys(tools)).toHaveLength(26);
   });
 
   test("all tool names use snake_case with cascade_ prefix", () => {
@@ -94,7 +102,7 @@ describe("createServer (server factory)", () => {
     const names = Object.keys(tools);
     const unique = new Set(names);
     expect(unique.size).toBe(names.length);
-    expect(unique.size).toBe(25);
+    expect(unique.size).toBe(26);
   });
 
   test("every expected tool from each cohort is present", () => {
@@ -134,5 +142,124 @@ describe("createServer (server factory)", () => {
     expect(result.content).toBeDefined();
     expect(Array.isArray(result.content)).toBe(true);
     expect(result.structuredContent).toEqual(READ_PAGE_OK);
+  });
+
+  test("cascade_read with oversize response mints handle, cascade_read_response retrieves slices", async () => {
+    const client = createMockClient({
+      read: mock(() => Promise.resolve(READ_PAGE_HUGE)),
+    });
+    const server = createServer(client);
+    const tools = getRegisteredTools(server);
+
+    const readTool = tools["cascade_read"];
+    const readResponseTool = tools["cascade_read_response"];
+    expect(readTool).toBeDefined();
+    expect(readResponseTool).toBeDefined();
+
+    // Act 1: cascade_read with oversize result should mint a handle.
+    const oversize = await readTool.handler({
+      identifier: { id: "huge-page-id", type: "page" },
+      response_format: "json",
+    });
+
+    expect(oversize.isError).not.toBe(true);
+
+    const firstBlock = oversize.content[0];
+    if (!firstBlock || firstBlock.type !== "text") {
+      throw new Error("expected first content block to be text");
+    }
+    expect(firstBlock.text).toContain("cascade_read_response");
+    expect(firstBlock.text).toMatch(/h_[a-z0-9-]+/i);
+
+    const structured = oversize.structuredContent as Record<string, any>;
+    const envelope = structured._cache;
+    expect(envelope).toBeDefined();
+    expect(typeof envelope.handle).toBe("string");
+    expect(envelope.handle.length).toBeGreaterThan(0);
+    expect(envelope.bytes_total).toBeGreaterThan(CHARACTER_LIMIT);
+    expect(structured.success).toBe(true);
+    // Full asset (xhtml) preserved in structuredContent alongside the envelope.
+    expect(structured.asset.page.xhtml).toBeDefined();
+
+    const handle = envelope.handle;
+
+    // Act 2: cascade_read_response {handle, offset: 0, length: 100}.
+    const firstSlice = await readResponseTool.handler({
+      handle,
+      offset: 0,
+      length: 100,
+      response_format: "markdown",
+    });
+
+    expect(firstSlice.isError).not.toBe(true);
+    const firstSliceStructured = firstSlice.structuredContent as Record<
+      string,
+      any
+    >;
+    expect(firstSliceStructured.bytes_returned).toBe(100);
+    expect(firstSliceStructured.has_more).toBe(true);
+    expect(firstSliceStructured.offset).toBe(0);
+    expect(firstSliceStructured.next_offset).toBe(100);
+
+    const firstSliceBlock = firstSlice.content[0];
+    if (!firstSliceBlock || firstSliceBlock.type !== "text") {
+      throw new Error("expected first slice content block to be text");
+    }
+    expect(firstSliceBlock.text.length).toBe(100);
+
+    // Act 3: cascade_read_response {handle, offset: 100, length: 100}.
+    const secondSlice = await readResponseTool.handler({
+      handle,
+      offset: 100,
+      length: 100,
+      response_format: "markdown",
+    });
+
+    expect(secondSlice.isError).not.toBe(true);
+    const secondSliceStructured = secondSlice.structuredContent as Record<
+      string,
+      any
+    >;
+    expect(secondSliceStructured.offset).toBe(100);
+    expect(secondSliceStructured.next_offset).toBe(200);
+
+    const secondSliceBlock = secondSlice.content[0];
+    if (!secondSliceBlock || secondSliceBlock.type !== "text") {
+      throw new Error("expected second slice content block to be text");
+    }
+    expect(secondSliceBlock.text.length).toBe(100);
+
+    // Sequential slices must be contiguous — i.e. second slice != first slice.
+    expect(secondSliceBlock.text).not.toBe(firstSliceBlock.text);
+  });
+
+  test("cascade_read with response_detail: 'summary' projects heavy fields", async () => {
+    const client = createMockClient({
+      read: mock(() => Promise.resolve(READ_PAGE_HUGE)),
+    });
+    const server = createServer(client);
+    const tools = getRegisteredTools(server);
+
+    const readTool = tools["cascade_read"];
+    const result = await readTool.handler({
+      identifier: { id: "huge-page-id", type: "page" },
+      response_detail: "summary",
+      response_format: "json",
+    });
+
+    expect(result.isError).not.toBe(true);
+    const structured = result.structuredContent as Record<string, any>;
+    const page = structured.asset.page;
+
+    expect(page.id).toBe("huge-page-id");
+    expect(page.name).toBe("huge-page");
+    expect(page.path).toBe("/huge");
+    expect(page.type).toBe("page");
+    expect(page.lastModifiedDate).toBe("2026-01-01T00:00:00Z");
+    expect(page.metadata).toBeDefined();
+
+    expect(page.xhtml).toBeUndefined();
+    expect(page.structuredData).toBeUndefined();
+    expect(page.pageConfigurations).toBeUndefined();
   });
 });

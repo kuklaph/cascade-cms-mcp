@@ -4,7 +4,8 @@
  * Every tool in this server goes through `registerCascadeTool` so the
  * validate → handle → format → error-translate pipeline lives in ONE place.
  * When the MCP SDK or Cascade library contracts change, only this file
- * needs editing — not all 25 tool registrations.
+ * needs editing — not all 26 tool registrations (25 Cascade tools + the
+ * `cascade_read_response` retrieval tool).
  */
 
 import type { z } from "zod";
@@ -20,6 +21,17 @@ import {
 } from "../formatting.js";
 import { translateError } from "../errors.js";
 import { logToolInvocation } from "../audit.js";
+import type { ResponseCache } from "../cache.js";
+
+/**
+ * Shared dependencies threaded through tool registration so tools can
+ * opt in to infrastructure (e.g., the response cache for oversize
+ * payloads). Optional at every call site so existing tests that don't
+ * supply deps keep working.
+ */
+export interface CascadeDeps {
+  cache: ResponseCache;
+}
 
 /**
  * Configuration for a single Cascade MCP tool.
@@ -44,6 +56,13 @@ export interface CascadeToolConfig<TSchema extends z.ZodObject<any>> {
   handler: (input: Omit<z.infer<TSchema>, "response_format">) => Promise<unknown>;
   /** Optional per-tool markdown override (ignored in json mode). */
   renderMarkdown?: MarkdownRenderer;
+  /**
+   * Optional list of fields to remove from `structuredContent` before
+   * sending. Used by tools that pass private channels through the result
+   * (e.g. `cascade_read_response` returns the slice via `_slice_text` for
+   * its custom renderer; this strips it from `structuredContent`).
+   */
+  stripFromStructured?: readonly string[];
 }
 
 /**
@@ -58,8 +77,18 @@ export interface CascadeToolConfig<TSchema extends z.ZodObject<any>> {
 export function registerCascadeTool<TSchema extends z.ZodObject<any>>(
   server: McpServer,
   config: CascadeToolConfig<TSchema>,
+  deps?: CascadeDeps,
 ): void {
-  const { name, title, description, inputSchema, annotations, handler, renderMarkdown } = config;
+  const {
+    name,
+    title,
+    description,
+    inputSchema,
+    annotations,
+    handler,
+    renderMarkdown,
+    stripFromStructured,
+  } = config;
 
   server.registerTool(
     name,
@@ -81,7 +110,10 @@ export function registerCascadeTool<TSchema extends z.ZodObject<any>>(
 
         const result = await handler(rest as Omit<z.infer<TSchema>, "response_format">);
 
-        const formatted = formatResponse(result, format, name, renderMarkdown);
+        const formatted = formatResponse(result, format, name, renderMarkdown, {
+          cache: deps?.cache,
+          stripFromStructured,
+        });
         logToolInvocation(name, "ok", Date.now() - start);
         return formatted;
       } catch (err) {
@@ -96,7 +128,7 @@ export function registerCascadeTool<TSchema extends z.ZodObject<any>>(
 
 /**
  * Compose a consistent tool description. Keeps the footer prose identical
- * across the 25 tools so agents see uniform guidance on response formats.
+ * across all 26 tools so agents see uniform guidance on response formats.
  */
 export function buildCascadeToolDescription(base: string): string {
   const footer =

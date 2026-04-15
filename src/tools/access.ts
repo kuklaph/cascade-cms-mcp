@@ -15,6 +15,7 @@ import type { CascadeClient } from "../client.js";
 import {
   registerCascadeTool,
   buildCascadeToolDescription,
+  type CascadeDeps,
 } from "./helper.js";
 import {
   ReadAccessRightsRequestSchema,
@@ -24,6 +25,7 @@ import {
 export function registerAccessTools(
   server: McpServer,
   client: CascadeClient,
+  deps?: CascadeDeps,
 ): void {
   registerCascadeTool(server, {
     name: "cascade_read_access_rights",
@@ -68,7 +70,7 @@ Error Handling:
       openWorldHint: true,
     },
     handler: (input) => client.readAccessRights(input as unknown as Types.ReadAccessRightsRequest),
-  });
+  }, deps);
 
   registerCascadeTool(server, {
     name: "cascade_edit_access_rights",
@@ -112,5 +114,5 @@ Error Handling:
       openWorldHint: true,
     },
     handler: (input) => client.editAccessRights(input as unknown as Types.EditAccessRightsRequest),
-  });
+  }, deps);
 }

@@ -15,6 +15,7 @@ import type { CascadeClient } from "../client.js";
 import {
   registerCascadeTool,
   buildCascadeToolDescription,
+  type CascadeDeps,
 } from "./helper.js";
 import {
   ListSitesRequestSchema,
@@ -24,6 +25,7 @@ import {
 export function registerSiteTools(
   server: McpServer,
   client: CascadeClient,
+  deps?: CascadeDeps,
 ): void {
   registerCascadeTool(server, {
     name: "cascade_list_sites",
@@ -59,7 +61,7 @@ Error Handling:
       openWorldHint: true,
     },
     handler: (input) => client.listSites(input as unknown as Types.ListSitesRequest),
-  });
+  }, deps);
 
   // SiteCopyRequestSchema uses `.refine()` which yields a ZodEffects wrapper.
   // The helper needs the underlying ZodObject (with `.shape`) for MCP
@@ -118,5 +120,5 @@ Error Handling:
       }
       return client.siteCopy(input as unknown as Types.SiteCopyRequest);
     },
-  });
+  }, deps);
 }

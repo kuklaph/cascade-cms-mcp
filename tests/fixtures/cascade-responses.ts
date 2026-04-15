@@ -51,3 +51,43 @@ export const FAILURE_NOT_FOUND = {
   success: false,
   message: "Asset not found",
 } as const;
+
+/**
+ * Read returned a page asset body with heavy fields included.
+ *
+ * Serves two purposes:
+ *   1. Drives the `response_detail: "summary"` projection tests — the projection
+ *      must strip `xhtml`, `structuredData`, `pageConfigurations` while keeping
+ *      `id`, `name`, `path`, `type`, `lastModifiedDate`, `metadata`.
+ *   2. Exercises the oversize-response cache pathway — the inflated `xhtml` body
+ *      and repeated `structuredDataNodes` push the rendered payload well past
+ *      `CHARACTER_LIMIT` so a handle is minted.
+ */
+export const READ_PAGE_HUGE = {
+  success: true,
+  asset: {
+    page: {
+      id: "huge-page-id",
+      name: "huge-page",
+      path: "/huge",
+      type: "page",
+      lastModifiedDate: "2026-01-01T00:00:00Z",
+      metadata: {
+        title: "Huge Page",
+        displayName: "Huge",
+        summary: "A page used to exercise the cache",
+      },
+      xhtml: "<div>" + "x".repeat(150_000) + "</div>",
+      structuredData: {
+        structuredDataNodes: Array.from({ length: 100 }, (_, i) => ({
+          identifier: `node-${i}`,
+          type: "text",
+          text: "y".repeat(500),
+        })),
+      },
+      pageConfigurations: [
+        { id: "pc1", configurationName: "Standard" },
+      ],
+    },
+  },
+} as const;

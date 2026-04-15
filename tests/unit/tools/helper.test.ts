@@ -5,6 +5,8 @@ import {
   registerCascadeTool,
   buildCascadeToolDescription,
 } from "../../../src/tools/helper.js";
+import { createResponseCache } from "../../../src/cache.js";
+import { CHARACTER_LIMIT } from "../../../src/constants.js";
 
 /** Minimal shape we require of McpServer for registerTool. */
 interface MockServer {
@@ -228,6 +230,109 @@ describe("registerCascadeTool", () => {
     expect(renderMarkdown).toHaveBeenCalledTimes(1);
     const text = firstText(result);
     expect(text).toContain("# Custom: wumbo");
+  });
+
+  // ---------------------------------------------------------------------------
+  // deps threading: verifies that the optional 3rd `deps` param flows the
+  // cache all the way into `formatResponse`. Indirect proof: when a handler
+  // returns an oversize result, the captured CallToolResult should include
+  // the `_cache` envelope that formatResponse only builds when it has a cache.
+  // ---------------------------------------------------------------------------
+
+  test("should thread deps.cache into formatResponse (oversize result mints handle)", async () => {
+    const server = makeMockServer();
+    const huge = "x".repeat(CHARACTER_LIMIT + 5_000);
+    // Use a custom renderMarkdown so the raw huge string becomes the rendered text.
+    const handler = mock(async () => ({ success: true, payload: huge }));
+    const renderMarkdown = (_r: unknown) => huge;
+    const cache = createResponseCache();
+
+    registerCascadeTool(
+      server as any,
+      {
+        name: "cascade_sample",
+        title: "Sample",
+        description: "desc",
+        inputSchema: SampleSchema,
+        annotations: SAMPLE_ANNOTATIONS,
+        handler,
+        renderMarkdown,
+      },
+      { cache },
+    );
+
+    const wrapped = server.registerTool.mock.calls[0][2] as (
+      input: unknown,
+    ) => Promise<CallToolResult>;
+
+    const result = await wrapped({ name: "x", response_format: "markdown" });
+
+    // Proof of threading: formatResponse attached `_cache` envelope to structuredContent.
+    const sc = result.structuredContent as Record<string, unknown> | undefined;
+    expect(sc).toBeDefined();
+    const envelope = sc?._cache as Record<string, unknown> | undefined;
+    expect(envelope).toBeDefined();
+    expect(typeof envelope?.handle).toBe("string");
+    expect((envelope?.handle as string).length).toBeGreaterThan(0);
+    expect((envelope?.handle as string).startsWith("h_")).toBe(true);
+    expect(envelope?.tool).toBe("cascade_read_response");
+    expect(cache.size()).toBe(1);
+  });
+
+  test("should NOT attach _cache envelope when deps is omitted (back-compat)", async () => {
+    const server = makeMockServer();
+    const huge = "y".repeat(CHARACTER_LIMIT + 5_000);
+    const handler = mock(async () => ({ success: true, payload: huge }));
+    const renderMarkdown = (_r: unknown) => huge;
+
+    registerCascadeTool(server as any, {
+      name: "cascade_sample",
+      title: "Sample",
+      description: "desc",
+      inputSchema: SampleSchema,
+      annotations: SAMPLE_ANNOTATIONS,
+      handler,
+      renderMarkdown,
+    });
+
+    const wrapped = server.registerTool.mock.calls[0][2] as (
+      input: unknown,
+    ) => Promise<CallToolResult>;
+
+    const result = await wrapped({ name: "x", response_format: "markdown" });
+
+    const sc = result.structuredContent as Record<string, unknown> | undefined;
+    expect(sc).toBeDefined();
+    expect(sc?._cache).toBeUndefined();
+  });
+
+  test("should NOT mint a handle when deps provided but result fits under limit", async () => {
+    const server = makeMockServer();
+    const handler = mock(async () => ({ success: true, small: "ok" }));
+    const cache = createResponseCache();
+
+    registerCascadeTool(
+      server as any,
+      {
+        name: "cascade_sample",
+        title: "Sample",
+        description: "desc",
+        inputSchema: SampleSchema,
+        annotations: SAMPLE_ANNOTATIONS,
+        handler,
+      },
+      { cache },
+    );
+
+    const wrapped = server.registerTool.mock.calls[0][2] as (
+      input: unknown,
+    ) => Promise<CallToolResult>;
+
+    const result = await wrapped({ name: "x", response_format: "markdown" });
+
+    const sc = result.structuredContent as Record<string, unknown> | undefined;
+    expect(sc?._cache).toBeUndefined();
+    expect(cache.size()).toBe(0);
   });
 });
 

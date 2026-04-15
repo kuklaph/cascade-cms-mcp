@@ -472,3 +472,51 @@ describe("ReadAuditsRequestSchema pagination", () => {
     expect(res.success).toBe(true);
   });
 });
+
+describe("ReadRequestSchema response_detail field", () => {
+  test("should accept response_detail: 'summary'", () => {
+    const res = ReadRequestSchema.safeParse({
+      identifier: ID_PAGE,
+      response_detail: "summary",
+    });
+    expect(res.success).toBe(true);
+    if (res.success) {
+      expect(res.data.response_detail).toBe("summary");
+    }
+  });
+
+  test("should accept response_detail: 'full'", () => {
+    const res = ReadRequestSchema.safeParse({
+      identifier: ID_PAGE,
+      response_detail: "full",
+    });
+    expect(res.success).toBe(true);
+    if (res.success) {
+      expect(res.data.response_detail).toBe("full");
+    }
+  });
+
+  test("should default response_detail to 'full' when omitted", () => {
+    const res = ReadRequestSchema.safeParse({ identifier: ID_PAGE });
+    expect(res.success).toBe(true);
+    if (res.success) {
+      expect(res.data.response_detail).toBe("full");
+    }
+  });
+
+  test("should reject unknown response_detail value", () => {
+    const res = ReadRequestSchema.safeParse({
+      identifier: ID_PAGE,
+      response_detail: "verbose",
+    });
+    expect(res.success).toBe(false);
+  });
+
+  test("EditRequestSchema should NOT accept response_detail (strict rejects unknown key)", () => {
+    const res = EditRequestSchema.safeParse({
+      asset: { ...VALID_ASSET, id: "existing-id" },
+      response_detail: "summary",
+    });
+    expect(res.success).toBe(false);
+  });
+});

@@ -19,6 +19,7 @@ import {
   OK_RESULT,
   CREATE_OK,
   READ_PAGE_OK,
+  READ_PAGE_HUGE,
 } from "../../fixtures/cascade-responses.js";
 
 
@@ -82,6 +83,147 @@ describe("cascade_read tool", () => {
     const text = firstText(result);
     expect(text).toContain("cascade_read");
     expect(text).toContain("Not Found");
+  });
+
+  test("response_detail: 'summary' projects out heavy fields on page asset", async () => {
+    const { server, tools } = makeMockServer();
+    const client = createMockClient({
+      read: mock(() => Promise.resolve(READ_PAGE_HUGE)),
+    });
+
+    registerCrudTools(server as any, client);
+    const tool = findTool(tools, "cascade_read");
+
+    const result = await tool.handler({
+      identifier: { id: "huge-page-id", type: "page" },
+      response_detail: "summary",
+      response_format: "json",
+    });
+
+    expect(result.isError).not.toBe(true);
+    const structured = result.structuredContent as Record<string, any>;
+    expect(structured.success).toBe(true);
+
+    const page = structured.asset.page;
+    expect(page.id).toBe("huge-page-id");
+    expect(page.name).toBe("huge-page");
+    expect(page.path).toBe("/huge");
+    expect(page.type).toBe("page");
+    expect(page.lastModifiedDate).toBe("2026-01-01T00:00:00Z");
+    expect(page.metadata).toEqual({
+      title: "Huge Page",
+      displayName: "Huge",
+      summary: "A page used to exercise the cache",
+    });
+
+    // Heavy fields stripped
+    expect(page.xhtml).toBeUndefined();
+    expect(page.structuredData).toBeUndefined();
+    expect(page.pageConfigurations).toBeUndefined();
+  });
+
+  test("response_detail: 'full' returns identical raw response (no projection)", async () => {
+    const { server, tools } = makeMockServer();
+    const client = createMockClient({
+      read: mock(() => Promise.resolve(READ_PAGE_HUGE)),
+    });
+
+    registerCrudTools(server as any, client);
+    const tool = findTool(tools, "cascade_read");
+
+    const result = await tool.handler({
+      identifier: { id: "huge-page-id", type: "page" },
+      response_detail: "full",
+      response_format: "json",
+    });
+
+    expect(result.isError).not.toBe(true);
+    const structured = result.structuredContent as Record<string, any>;
+    expect(structured.asset.page.xhtml).toBeDefined();
+    expect(structured.asset.page.structuredData).toBeDefined();
+    expect(structured.asset.page.pageConfigurations).toBeDefined();
+  });
+
+  test("response_detail omitted: defaults to 'full' (no projection)", async () => {
+    const { server, tools } = makeMockServer();
+    const client = createMockClient({
+      read: mock(() => Promise.resolve(READ_PAGE_HUGE)),
+    });
+
+    registerCrudTools(server as any, client);
+    const tool = findTool(tools, "cascade_read");
+
+    const result = await tool.handler({
+      identifier: { id: "huge-page-id", type: "page" },
+      response_format: "json",
+    });
+
+    expect(result.isError).not.toBe(true);
+    const structured = result.structuredContent as Record<string, any>;
+    expect(structured.asset.page.xhtml).toBeDefined();
+    expect(structured.asset.page.structuredData).toBeDefined();
+    expect(structured.asset.page.pageConfigurations).toBeDefined();
+  });
+
+  test("response_detail: 'summary' on file asset omits data and text, keeps metadata", async () => {
+    const FILE_ASSET = {
+      success: true,
+      asset: {
+        file: {
+          id: "file-001",
+          name: "logo.png",
+          path: "/assets/logo.png",
+          type: "file",
+          lastModifiedDate: "2026-02-01T00:00:00Z",
+          metadata: { title: "Logo" },
+          data: "base64bytes",
+          text: "fallback text body",
+        },
+      },
+    };
+    const { server, tools } = makeMockServer();
+    const client = createMockClient({
+      read: mock(() => Promise.resolve(FILE_ASSET)),
+    });
+
+    registerCrudTools(server as any, client);
+    const tool = findTool(tools, "cascade_read");
+
+    const result = await tool.handler({
+      identifier: { id: "file-001", type: "file" },
+      response_detail: "summary",
+      response_format: "json",
+    });
+
+    const structured = result.structuredContent as Record<string, any>;
+    const file = structured.asset.file;
+
+    expect(file.id).toBe("file-001");
+    expect(file.metadata).toEqual({ title: "Logo" });
+    expect(file.data).toBeUndefined();
+    expect(file.text).toBeUndefined();
+  });
+
+  test("response_detail: 'summary' robust on empty asset (returns unchanged)", async () => {
+    const EMPTY_ASSET = { success: true, asset: {} };
+    const { server, tools } = makeMockServer();
+    const client = createMockClient({
+      read: mock(() => Promise.resolve(EMPTY_ASSET)),
+    });
+
+    registerCrudTools(server as any, client);
+    const tool = findTool(tools, "cascade_read");
+
+    const result = await tool.handler({
+      identifier: { id: "x", type: "page" },
+      response_detail: "summary",
+      response_format: "json",
+    });
+
+    expect(result.isError).not.toBe(true);
+    const structured = result.structuredContent as Record<string, any>;
+    expect(structured.success).toBe(true);
+    expect(structured.asset).toEqual({});
   });
 });
 

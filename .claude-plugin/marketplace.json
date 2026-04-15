@@ -11,7 +11,7 @@
     {
       "name": "cascade-cms",
       "source": "./",
-      "description": "Cascade CMS MCP server — 25 tools across CRUD, search, workflow, messaging, audits, and publish for reading, editing, and managing Cascade CMS content via Claude.",
+      "description": "Cascade CMS MCP server — 26 tools across CRUD, search, workflow, messaging, audits, publish, and oversize-response retrieval for reading, editing, and managing Cascade CMS content via Claude.",
       "version": "0.1.0",
       "author": {
         "name": "Philip Kukla"

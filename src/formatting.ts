@@ -2,21 +2,41 @@
  * Response formatting for the Cascade CMS MCP server.
  *
  * Produces MCP-compliant `CallToolResult` objects with both:
- *   - `content`: text (markdown or JSON, truncated if over CHARACTER_LIMIT)
- *   - `structuredContent`: the raw result object (NEVER truncated)
+ *   - `content`: text (markdown or JSON). When over CHARACTER_LIMIT and
+ *     a response cache is supplied, returns a bounded preview + a handle
+ *     usable with the `cascade_read_response` tool. When no cache is
+ *     supplied, falls back to a legacy truncation marker (back-compat).
+ *   - `structuredContent`: the raw result object (NEVER truncated). On
+ *     oversize a sibling `_cache` envelope is added with handle metadata.
  *
  * LLM agents get readable text by default (markdown), can request
  * full JSON via `response_format: "json"`, or can programmatically
- * consume `structuredContent` when they need complete data.
+ * consume `structuredContent` when they need complete data. Oversize
+ * responses are recoverable via `cascade_read_response({handle, offset,
+ * length})` rather than being silently lost.
  */
 
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import { CHARACTER_LIMIT } from "./constants.js";
+import { CHARACTER_LIMIT, PREVIEW_LIMIT } from "./constants.js";
+import type { ResponseCache } from "./cache.js";
 
 export type ResponseFormat = "markdown" | "json";
 
 /** Optional custom markdown renderer for a tool. */
 export type MarkdownRenderer = (result: unknown) => string;
+
+/** Options for `formatResponse` — optional cache + private-field stripping. */
+export interface FormatResponseOptions {
+  cache?: ResponseCache;
+  /**
+   * Field names to remove from `structuredContent` before sending. Useful
+   * for private channels from a custom `renderMarkdown` to the text block —
+   * e.g. `cascade_read_response` returns the slice via `_slice_text` so its
+   * renderer can pass it through raw, then strips it here so it doesn't
+   * duplicate into the structured payload.
+   */
+  stripFromStructured?: readonly string[];
+}
 
 /**
  * Format a tool result into an MCP `CallToolResult`.
@@ -31,6 +51,7 @@ export function formatResponse(
   format: ResponseFormat,
   toolName: string,
   renderMarkdown?: MarkdownRenderer,
+  options?: FormatResponseOptions,
 ): CallToolResult {
   // Build the text block.
   let text: string;
@@ -47,11 +68,30 @@ export function formatResponse(
     text = "(empty response)";
   }
 
+  const structured = stripFields(toStructured(result), options?.stripFromStructured);
+
+  // Oversize branch with cache: mint handle, return bounded preview + envelope.
+  if (text.length > CHARACTER_LIMIT && options?.cache) {
+    const handle = options.cache.put(toolName, format, text);
+    const preview = buildOversizePreview(text, handle);
+    const envelope = {
+      handle,
+      bytes_total: text.length,
+      bytes_returned: PREVIEW_LIMIT,
+      tool: "cascade_read_response" as const,
+    };
+    return {
+      content: [{ type: "text", text: preview }],
+      structuredContent: { ...structured, _cache: envelope },
+    };
+  }
+
+  // Back-compat: truncate with legacy marker, structuredContent untouched.
   text = truncate(text);
 
   return {
     content: [{ type: "text", text }],
-    structuredContent: toStructured(result),
+    structuredContent: structured,
   };
 }
 
@@ -73,13 +113,44 @@ function toStructured(result: unknown): Record<string, unknown> {
   return result as Record<string, unknown>;
 }
 
+/**
+ * Return a shallow copy of `structured` with `fields` removed. No-op
+ * (identity) when `fields` is empty/undefined to avoid an unnecessary copy
+ * on the common path. Used to strip handler-private channels from
+ * structuredContent (see `FormatResponseOptions.stripFromStructured`).
+ */
+function stripFields(
+  structured: Record<string, unknown>,
+  fields: readonly string[] | undefined,
+): Record<string, unknown> {
+  if (!fields || fields.length === 0) return structured;
+  const out: Record<string, unknown> = { ...structured };
+  for (const f of fields) delete out[f];
+  return out;
+}
+
 function truncate(text: string): string {
   if (text.length <= CHARACTER_LIMIT) return text;
   const omitted = text.length - CHARACTER_LIMIT;
   return (
     text.slice(0, CHARACTER_LIMIT) +
-    `\n\n[truncated — ${omitted} chars omitted. Use response_format="json" for full data]`
+    `\n\n[truncated — ${omitted} chars omitted. structuredContent retains the full payload]`
   );
+}
+
+/**
+ * Build a bounded preview + marker tail advertising the cache handle.
+ * Shape of the marker is stable and used by downstream tooling/agents.
+ */
+function buildOversizePreview(fullText: string, handle: string): string {
+  const preview = fullText.slice(0, PREVIEW_LIMIT);
+  const marker =
+    `\n\n---\n[Preview truncated at ${PREVIEW_LIMIT} of ${fullText.length} chars. ` +
+    `Full response retained as handle ${handle}. ` +
+    `To retrieve more: call cascade_read_response({handle, offset, length}). ` +
+    `Slice with offset:${PREVIEW_LIMIT} to continue. ` +
+    `See structuredContent._cache for machine-readable metadata.]`;
+  return preview + marker;
 }
 
 /**

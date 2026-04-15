@@ -1,8 +1,11 @@
 /**
  * Server factory for the Cascade CMS MCP server.
  *
- * Instantiates a single `McpServer` and registers all tool cohorts
- * (25 tools across 9 files) against the provided Cascade client.
+ * Instantiates a single `McpServer` and registers 26 tools: 25 Cascade
+ * tools across 9 files (CRUD, search, sites, access, workflow, messages,
+ * checkout, audits, publish) against the provided Cascade client, plus
+ * the MCP-native `cascade_read_response` retrieval tool that reads
+ * slices from the in-memory response cache.
  *
  * Pure and side-effect-free: callers own transport/lifecycle.
  */
@@ -10,6 +13,8 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CascadeClient } from "./client.js";
 import { SERVER_NAME, SERVER_VERSION } from "./constants.js";
+import { createResponseCache } from "./cache.js";
+import type { CascadeDeps } from "./tools/helper.js";
 import { registerCrudTools } from "./tools/crud.js";
 import { registerSearchTools } from "./tools/search.js";
 import { registerSiteTools } from "./tools/sites.js";
@@ -19,31 +24,47 @@ import { registerMessageTools } from "./tools/messages.js";
 import { registerCheckoutTools } from "./tools/checkout.js";
 import { registerAuditTools } from "./tools/audits.js";
 import { registerPublishTools } from "./tools/publish.js";
+import { registerReadResponseTool } from "./tools/readResponse.js";
 import { registerCascadeResources } from "./resources.js";
 
 /**
- * Build an `McpServer` with all 25 Cascade tools registered.
+ * Build an `McpServer` with all Cascade tools registered.
  *
  * The server is returned unconnected; the caller must attach a transport
  * (e.g., `StdioServerTransport`) and invoke `server.connect(transport)`.
+ *
+ * @param client - The Cascade API client.
+ * @param deps   - Optional shared dependencies. When omitted, a fresh in-memory
+ *                 response cache is built so oversize tool results can mint
+ *                 handles consumable by `cascade_read_response`.
  */
-export function createServer(client: CascadeClient): McpServer {
+export function createServer(
+  client: CascadeClient,
+  deps?: CascadeDeps,
+): McpServer {
   const server = new McpServer({
     name: SERVER_NAME,
     version: SERVER_VERSION,
   });
 
-  registerCrudTools(server, client);
-  registerSearchTools(server, client);
-  registerSiteTools(server, client);
-  registerAccessTools(server, client);
-  registerWorkflowTools(server, client);
-  registerMessageTools(server, client);
-  registerCheckoutTools(server, client);
-  registerAuditTools(server, client);
-  registerPublishTools(server, client);
+  const resolved: CascadeDeps = deps ?? { cache: createResponseCache() };
+
+  registerCrudTools(server, client, resolved);
+  registerSearchTools(server, client, resolved);
+  registerSiteTools(server, client, resolved);
+  registerAccessTools(server, client, resolved);
+  registerWorkflowTools(server, client, resolved);
+  registerMessageTools(server, client, resolved);
+  registerCheckoutTools(server, client, resolved);
+  registerAuditTools(server, client, resolved);
+  registerPublishTools(server, client, resolved);
 
   registerCascadeResources(server, client);
+
+  // Retrieval tool: reads slices from the response cache populated by the
+  // other tool cohorts above. Registered last so it appears after the
+  // Cascade-backed tools in the MCP tool list.
+  registerReadResponseTool(server, resolved);
 
   return server;
 }
