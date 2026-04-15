@@ -13,12 +13,12 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/kuklaph/cascade-cms-mcp.git"
+    "url": "git+https://github.com/kuklaph/cascade-cms-mcp-server.git"
   },
   "bugs": {
-    "url": "https://github.com/kuklaph/cascade-cms-mcp/issues"
+    "url": "https://github.com/kuklaph/cascade-cms-mcp-server/issues"
   },
-  "homepage": "https://github.com/kuklaph/cascade-cms-mcp#readme",
+  "homepage": "https://github.com/kuklaph/cascade-cms-mcp-server#readme",
   "type": "module",
   "main": "dist/index.js",
   "bin": {

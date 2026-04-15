@@ -17,8 +17,8 @@
         "name": "Philip Kukla"
       },
       "license": "MIT",
-      "homepage": "https://github.com/kuklaph/cascade-cms-mcp#readme",
-      "repository": "https://github.com/kuklaph/cascade-cms-mcp",
+      "homepage": "https://github.com/kuklaph/cascade-cms-mcp-server#readme",
+      "repository": "https://github.com/kuklaph/cascade-cms-mcp-server",
       "keywords": ["mcp", "cascade-cms", "cms", "claude-plugin"],
       "category": "integrations"
     }

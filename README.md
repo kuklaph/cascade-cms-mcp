@@ -467,8 +467,8 @@ For contributors and those wanting to run a local build or modify the server. En
 ### Setup
 
 ```bash
-git clone https://github.com/kuklaph/cascade-cms-mcp
-cd cascade-cms-mcp
+git clone https://github.com/kuklaph/cascade-cms-mcp-server
+cd cascade-cms-mcp-server
 bun install
 ```
 

@@ -5,8 +5,8 @@
   "author": {
     "name": "Philip Kukla"
   },
-  "homepage": "https://github.com/kuklaph/cascade-cms-mcp#readme",
-  "repository": "https://github.com/kuklaph/cascade-cms-mcp",
+  "homepage": "https://github.com/kuklaph/cascade-cms-mcp-server#readme",
+  "repository": "https://github.com/kuklaph/cascade-cms-mcp-server",
   "license": "MIT",
   "keywords": ["mcp", "cascade-cms", "cms", "claude-plugin"],
   "mcpServers": {
