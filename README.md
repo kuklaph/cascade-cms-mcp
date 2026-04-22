@@ -90,6 +90,17 @@ Whichever path you pick, the same three variables control the server:
 
 The server exits with a clear error on startup if `CASCADE_API_KEY` or `CASCADE_URL` is missing or invalid.
 
+#### Encrypted values (optional)
+
+Any of the three env vars can be an [envlock](https://github.com/kuklaph/envlock) ciphertext (`enc:<iv>:<authTag>:<ciphertext>`) instead of plaintext — useful when the value would otherwise sit in plain sight inside an MCP client config file. envlock is an optional peer dependency; install it globally only if you want to use encrypted values:
+
+```sh
+bun install -g envlock   # or: npm install -g envlock
+envlock set CASCADE_API_KEY "sk-your-key"   # run in a throwaway dir, then copy the enc:... output
+```
+
+If an `enc:` value is detected but envlock isn't installed, the server exits with an actionable error. Decryption errors (tampered ciphertext, wrong master key) also exit cleanly without leaking the ciphertext. Plaintext values pass through untouched and envlock is never loaded.
+
 ## MCP Client Configuration
 
 ### Claude Desktop

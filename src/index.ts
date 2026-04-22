@@ -28,7 +28,7 @@ async function main(): Promise<void> {
 
   let config;
   try {
-    config = loadConfig();
+    config = await loadConfig();
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     process.stderr.write(`[${SERVER_NAME}] ${msg}\n`);

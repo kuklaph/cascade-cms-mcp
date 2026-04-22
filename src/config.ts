@@ -4,6 +4,10 @@
  * Reads and validates environment variables. Throws descriptive errors
  * when required variables are missing or invalid. Never leaks secret
  * values in error messages.
+ *
+ * Values prefixed with `enc:` are decrypted via the optional `envlock`
+ * peer dependency. envlock is imported lazily — only loaded when at
+ * least one env value is encrypted.
  */
 
 import { z } from "zod";
@@ -32,17 +36,80 @@ const ConfigSchema = z.object({
     ),
 });
 
+type EnvlockModule = {
+  decrypt: (encrypted: string) => string;
+  isEncrypted: (value: string) => boolean;
+};
+
+async function loadEnvlock(): Promise<EnvlockModule> {
+  try {
+    return (await import("envlock")) as EnvlockModule;
+  } catch {
+    throw new Error(
+      "Encrypted env value detected (enc:...) but the 'envlock' peer dependency is not installed. " +
+      "Install it: `bun add envlock` (or `npm install envlock`).",
+    );
+  }
+}
+
+async function decryptIfNeeded(
+  fieldName: string,
+  value: string | undefined,
+  envlock: EnvlockModule | null,
+): Promise<{ value: string | undefined; envlock: EnvlockModule | null }> {
+  if (value === undefined) return { value, envlock };
+
+  const mod = envlock ?? (await loadEnvlock());
+  if (!mod.isEncrypted(value)) return { value, envlock: mod };
+
+  try {
+    return { value: mod.decrypt(value), envlock: mod };
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : "decryption failed";
+    throw new Error(`Failed to decrypt ${fieldName}: ${reason}`);
+  }
+}
+
+
 /**
  * Load and validate server configuration from environment variables.
  *
+ * Values beginning with `enc:` are decrypted via envlock. If any
+ * encrypted value is present and envlock is not installed, an
+ * actionable error is thrown.
+ *
  * @throws Error with an actionable message naming the missing/invalid
- *   variable. Secret values (API keys) are never included in the message.
+ *   variable. Secret values (API keys, ciphertexts) are never included
+ *   in the message.
  */
-export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
+export async function loadConfig(
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<Config> {
+  let envlock: EnvlockModule | null = null;
+  let apiKey: string | undefined;
+  let url: string | undefined;
+  let timeoutMs: string | undefined;
+
+  ({ value: apiKey, envlock } = await decryptIfNeeded(
+    "CASCADE_API_KEY",
+    env.CASCADE_API_KEY,
+    envlock,
+  ));
+  ({ value: url, envlock } = await decryptIfNeeded(
+    "CASCADE_URL",
+    env.CASCADE_URL,
+    envlock,
+  ));
+  ({ value: timeoutMs, envlock } = await decryptIfNeeded(
+    "CASCADE_TIMEOUT_MS",
+    env.CASCADE_TIMEOUT_MS,
+    envlock,
+  ));
+
   const parsed = ConfigSchema.safeParse({
-    CASCADE_API_KEY: env.CASCADE_API_KEY,
-    CASCADE_URL: env.CASCADE_URL,
-    CASCADE_TIMEOUT_MS: env.CASCADE_TIMEOUT_MS,
+    CASCADE_API_KEY: apiKey,
+    CASCADE_URL: url,
+    CASCADE_TIMEOUT_MS: timeoutMs,
   });
 
   if (!parsed.success) {

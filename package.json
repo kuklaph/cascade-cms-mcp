@@ -43,9 +43,18 @@
     "cascade-cms-api": "^1.1.0",
     "zod": "^3.23.0"
   },
+  "peerDependencies": {
+    "envlock": "^1.0.0"
+  },
+  "peerDependenciesMeta": {
+    "envlock": {
+      "optional": true
+    }
+  },
   "devDependencies": {
     "@types/bun": "latest",
     "@types/node": "^20.0.0",
+    "envlock": "link:envlock",
     "typescript": "^5.5.0"
   }
 }

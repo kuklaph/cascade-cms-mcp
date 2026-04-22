@@ -12,8 +12,15 @@
       "devDependencies": {
         "@types/bun": "latest",
         "@types/node": "^20.0.0",
+        "envlock": "link:envlock",
         "typescript": "^5.5.0",
       },
+      "peerDependencies": {
+        "envlock": "^1.0.0",
+      },
+      "optionalPeers": [
+        "envlock",
+      ],
     },
   },
   "packages": {
@@ -64,6 +71,8 @@
     "ee-first": ["ee-first@1.1.1", "", {}, "sha512-WMwm9LhRUo+WUaRN+vRuETqG89IgZphVSNkdFgeb6sS/E4OrDIN7t48CAewSHXc6C8lefD8KKfr5vY61brQlow=="],
 
     "encodeurl": ["encodeurl@2.0.0", "", {}, "sha512-Q0n9HRi4m6JuGIV1eFlmvJB7ZEVxu93IrMyiMsGC0lrMJMWzRgx6WGquyfQgZVb31vhGgXnfmPNNXmxnOkRBrg=="],
+
+    "envlock": ["envlock@link:envlock", { "bin": { "envlock": "bin/cli.ts" } }],
 
     "es-define-property": ["es-define-property@1.0.1", "", {}, "sha512-e3nRfgfUZ4rNGL232gUgX06QNyyez04KdjFrF+LTRoOXmrOgFKDg4BCdsjW8EnT69eqdYGmRpJwiPVYNrCaW3g=="],
 
