@@ -7,3 +7,6 @@ dist/
 # Tool-local state (Claude Code / Serena MCP)
 .claude/
 .serena/
+
+# Scratch / research artifacts (not part of the shipped code)
+temp/

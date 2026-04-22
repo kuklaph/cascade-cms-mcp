@@ -30,11 +30,13 @@ import {
 // Reusable fixtures
 const ID_PAGE = { id: "abc123", type: "page" as const };
 const VALID_ASSET = {
-  type: "page" as const,
-  name: "index",
-  parentFolderPath: "/",
-  siteName: "my-site",
-  contentTypePath: "/content-types/default",
+  page: {
+    type: "page" as const,
+    name: "index",
+    parentFolderPath: "/",
+    siteName: "my-site",
+    contentTypePath: "/content-types/default",
+  },
 };
 
 describe("ReadRequestSchema", () => {
@@ -54,7 +56,7 @@ describe("CreateRequestSchema", () => {
 describe("EditRequestSchema", () => {
   test("should accept a valid edit request (same shape as create)", () => {
     const res = EditRequestSchema.safeParse({
-      asset: { ...VALID_ASSET, id: "existing-id" },
+      asset: { page: { ...VALID_ASSET.page, id: "existing-id" } },
     });
     expect(res.success).toBe(true);
   });
@@ -514,7 +516,7 @@ describe("ReadRequestSchema response_detail field", () => {
 
   test("EditRequestSchema should NOT accept response_detail (strict rejects unknown key)", () => {
     const res = EditRequestSchema.safeParse({
-      asset: { ...VALID_ASSET, id: "existing-id" },
+      asset: { page: { ...VALID_ASSET.page, id: "existing-id" } },
       response_detail: "summary",
     });
     expect(res.success).toBe(false);

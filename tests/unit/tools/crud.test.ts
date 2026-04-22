@@ -29,11 +29,13 @@ import {
 
 const ID_PAGE = { id: "abc123", type: "page" as const };
 const VALID_ASSET = {
-  type: "page" as const,
-  name: "index",
-  parentFolderPath: "/",
-  siteName: "my-site",
-  contentTypePath: "/content-types/default",
+  page: {
+    type: "page" as const,
+    name: "index",
+    parentFolderPath: "/",
+    siteName: "my-site",
+    contentTypePath: "/content-types/default",
+  },
 };
 
 // =============================================================================
@@ -294,7 +296,7 @@ describe("cascade_edit tool", () => {
     expect(tool.config.annotations.destructiveHint).toBe(false);
     expect(tool.config.annotations.idempotentHint).toBe(false);
 
-    const assetWithId = { ...VALID_ASSET, id: "page-001" };
+    const assetWithId = { page: { ...VALID_ASSET.page, id: "page-001" } };
     const result = await tool.handler({
       asset: assetWithId,
       response_format: "json",
@@ -319,7 +321,7 @@ describe("cascade_edit tool", () => {
     registerCrudTools(server as any, client);
     const tool = findTool(tools, "cascade_edit");
 
-    const result = await tool.handler({ asset: { ...VALID_ASSET, id: "p1" } });
+    const result = await tool.handler({ asset: { page: { ...VALID_ASSET.page, id: "p1" } } });
 
     expect(result.isError).toBe(true);
     expect(firstText(result)).toContain("cascade_edit");

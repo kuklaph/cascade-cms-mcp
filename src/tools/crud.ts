@@ -163,18 +163,18 @@ Error Handling:
     description: buildCascadeToolDescription(
       `Create a new asset in Cascade CMS.
 
-Accepts a discriminated asset body keyed by type. Five common types (page, file, folder, block, symlink) use strict schemas with named required fields; all other types pass through for Cascade's own validation. Returns the new asset's ID on success so follow-up calls can reference it.
+The request body wraps a typed envelope under \`asset\` — one of 48 envelope keys (page, file, folder, symlink, textBlock, feedBlock, indexBlock, xmlBlock, xhtmlDataDefinitionBlock, twitterFeedBlock, reference, template, xsltFormat, scriptFormat, user, group, role, assetFactory, contentType, destination, editorConfiguration, metadataSet, pageConfigurationSet, publishSet, dataDefinition, sharedField, site, workflowDefinition, workflowEmail, wordPressConnector, googleAnalyticsConnector, fileSystemTransport, ftpTransport, databaseTransport, cloudTransport, and the *Container types). This matches the upstream Cascade REST API \`Asset\` schema exactly. Returns the new asset's ID on success.
 
 Args:
-  - asset (object, required): The asset to create, keyed by type
-    - type (string, required): One of the 56 entity types (e.g., "page", "file", "folder", "block", "symlink", "template")
-    - Type-specific body. Common shapes:
-      - page: { name, parentFolderId OR parentFolderPath, siteId/siteName, contentTypeId OR contentTypePath, metadata?, structuredData?, ... }
-      - file: { name, parentFolderId OR parentFolderPath, siteId/siteName, data (base64) OR text, ... }
-      - folder: { name, parentFolderId OR parentFolderPath, siteId/siteName, metadata?, ... }
-      - block (type="block"): { name, parentFolderId OR parentFolderPath, siteId/siteName, blockType, xml?, structuredData?, ... }
-      - symlink: { name, parentFolderId OR parentFolderPath, siteId/siteName, linkURL, ... }
-    - Other types (template, contentType, workflow, etc.) accept passthrough shape — see Cascade docs.
+  - asset (object, required): Single-key envelope. Key is the camelCase type; value is the asset body.
+    Common shapes:
+      - { page: { name, parentFolderId OR parentFolderPath, siteId OR siteName, contentTypeId OR contentTypePath, metadata?, structuredData? OR xhtml?, ... } }
+      - { file: { name, parentFolderId OR parentFolderPath, siteId OR siteName, text? OR data?, ... } }
+      - { folder: { name, parentFolderId OR parentFolderPath, siteId OR siteName, metadata?, ... } }
+      - { textBlock: { name, parentFolderId OR parentFolderPath, siteId OR siteName, text, ... } }
+      - { xmlBlock: { name, parentFolderId OR parentFolderPath, siteId OR siteName, xml, ... } }
+      - { symlink: { name, parentFolderId OR parentFolderPath, siteId OR siteName, linkURL, ... } }
+    Admin-area types (assetFactory, contentType, transports, workflow*, *Container) use \`parentContainerId/Path\` instead of \`parentFolderId/Path\`.
 
 Returns:
   Cascade OperationResult:
@@ -182,8 +182,9 @@ Returns:
   On failure: { success: false, message: "<error>" }
 
 Examples:
-  - Use when: "Create a page under /about" -> { asset: { type: "page", name: "team", parentFolderPath: "/about", siteName: "www", contentTypePath: "/standard-page" } }
-  - Use when: "Upload a text file" -> { asset: { type: "file", name: "robots.txt", parentFolderPath: "/", siteName: "www", text: "User-agent: *" } }
+  - Use when: "Create a page under /about" -> { asset: { page: { name: "team", parentFolderPath: "/about", siteName: "www", contentTypePath: "/standard-page" } } }
+  - Use when: "Upload a text file" -> { asset: { file: { name: "robots.txt", parentFolderPath: "/", siteName: "www", text: "User-agent: *" } } }
+  - Use when: "Create a text block" -> { asset: { textBlock: { name: "greeting", parentFolderPath: "/blocks", siteName: "www", text: "Hello" } } }
   - Don't use when: The asset already exists — use cascade_edit.
   - Don't use when: You want to duplicate an existing asset — use cascade_copy.
 
@@ -209,13 +210,10 @@ Error Handling:
     description: buildCascadeToolDescription(
       `Edit an existing Cascade CMS asset.
 
-Accepts the full asset body (same shape as create — discriminated by type). The asset must already exist and be identified by id or by site + path within the asset object itself. For LLMs: typically read the asset first with cascade_read, modify the returned structure, then pass it back here. Some asset types require a prior cascade_check_out.
+Accepts the full asset body (same envelope shape as cascade_create). The workflow is symmetric: cascade_read returns { asset: { <typeKey>: {...} } }; modify the inner object; pass the same envelope back to cascade_edit. Some asset types require a prior cascade_check_out.
 
 Args:
-  - asset (object, required): The complete asset body after your edits
-    - type (string, required): Must match the existing asset's type (e.g., "page", "file", "folder", "block", "symlink")
-    - id (string, optional): Existing asset ID — strongly recommended for reliability
-    - Remaining fields: same shape as cascade_create for the matching type. Include ALL fields (this is a replace, not a patch) — preserve fields you aren't changing.
+  - asset (object, required): Single-key envelope (same as cascade_create). Inner object must include \`id\` to identify the existing asset.
 
 Returns:
   Cascade OperationResult:
@@ -223,8 +221,9 @@ Returns:
   On failure: { success: false, message: "<error>" }
 
 Examples:
-  - Use when: "Update a page's metadata" -> Read first with cascade_read, modify the asset.page.metadata, pass the whole asset back.
-  - Use when: "Change a block's structured data" -> { asset: { type: "block", id: "...", structuredData: { ... } } }
+  - Use when: "Update a page's metadata" -> Read first with cascade_read; modify \`asset.page.metadata\`; pass { asset: asset.asset } back.
+  - Use when: "Change a block's structured data" -> { asset: { xhtmlDataDefinitionBlock: { id: "...", structuredData: { ... } } } }
+  - Use when: "Rewrite a symlink's target" -> { asset: { symlink: { id: "...", linkURL: "https://new.example.com" } } }
   - Don't use when: The asset doesn't exist — use cascade_create.
   - Don't use when: You want a partial patch — Cascade's edit replaces the asset body; always send the full object.
 

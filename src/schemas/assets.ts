@@ -1,413 +1,384 @@
 /**
- * Zod schemas for Cascade CMS asset inputs (create/edit payloads).
+ * Zod schemas for Cascade CMS asset inputs — `AssetInputSchema` and friends.
  *
- * Shape:
- *   - Strict schemas for the 5 common asset types: page, file, folder, block, symlink
- *   - Generic passthrough fallback for the remaining 51 entity types
- *   - Discriminated union keyed on `type`
- *   - Wrapper schema matching Cascade's `{ asset: ... }` aggregate
+ * Cascade's REST API models asset payloads as a tagged-envelope object:
  *
- * Rationale: LLMs get rich guided validation for the 5 types they use 95% of
- * the time; rare types still work via passthrough. Nested `metadata` and
- * `structuredData` objects are unbounded, so they're typed as passthrough
- * records — Cascade's own error response surfaces any deeper issues.
+ *     { <typeKey>: { ...fields } }
+ *
+ * where `<typeKey>` is one of 48 camelCase property names on the upstream
+ * `Asset` schema (`openapi.yaml` line 3841). Each concrete Cascade type
+ * (Page, File, TextBlock, Template, User, ...) is keyed under its own
+ * property. This file assembles per-variant Zod schemas from the
+ * `./assets/` sub-modules into a single union that mirrors the REST API
+ * exactly.
+ *
+ * Design notes:
+ *
+ * - **Shape mirror**. Every field declared in the upstream OpenAPI spec is
+ *   present here with the correct `required`/`optional`/`nullable` marker.
+ *   Unknown keys on an asset object are rejected (`.strict()`) to catch
+ *   typos early. Round-trip from `cascade_read` works because every field
+ *   Cascade returns (including the echoed `type` string at the top of each
+ *   inner object) is modelled.
+ *
+ * - **Required vs optional rule.** A field is `.required()` here if and
+ *   only if it appears in the upstream OpenAPI `required:` array for its
+ *   type. `NamedAssetFields.name` is required (OpenAPI requires it), even
+ *   though description text says "ignored on edit" — Cascade's spec is our
+ *   single source of truth. `parentFolderId`/`parentFolderPath` and
+ *   `parentContainerId/Path` are optional here because OpenAPI never
+ *   declares them required (the "required on create" rule lives only in
+ *   description prose). Cascade validates create-side constraints
+ *   server-side in both cases.
+ *
+ * - **No cross-field refinements**. Several types document rules like
+ *   "one of xhtml/structuredData REQUIRED" or "searchString REQUIRED when
+ *   queryType='search-terms'". The upstream OpenAPI does NOT express these
+ *   in its `required:` arrays — they are documentation-only. We mirror the
+ *   spec and leave enforcement to Cascade.
+ *
+ * - **Union, not discriminated union**. Envelope keys are object keys, not
+ *   fields — Zod's `discriminatedUnion` requires a discriminator field, so
+ *   we use `z.union` instead. Error messages on invalid shapes list every
+ *   branch that failed to match; the caller's tool description points
+ *   agents to the correct envelope.
  */
 
 import { z } from "zod";
 
-/** Passthrough record for arbitrary nested objects (metadata, structuredData). */
-const PassthroughRecord = z
-  .object({})
-  .passthrough()
-  .describe(
-    "Arbitrary nested object. Cascade's server-side validation applies; structure varies by asset type and data definition.",
-  );
+// ─── Envelope schemas from sub-modules ─────────────────────────────────────
 
-/** Common fields present on every folder-contained asset variant. */
-const commonAssetFields = {
-  name: z
-    .string()
-    .min(1, "name is required")
-    .describe(
-      "Asset name (required on create, ignored on edit — use the move operation to rename).",
-    ),
-  id: z
-    .string()
-    .optional()
-    .describe(
-      "Asset ID. Omit on create (Cascade assigns it); required on edit to identify the target asset.",
-    ),
-  parentFolderId: z
-    .string()
-    .optional()
-    .describe(
-      "Parent folder ID. Required on create (either this or parentFolderPath); ignored on edit. Priority: parentFolderId > parentFolderPath.",
-    ),
-  parentFolderPath: z
-    .string()
-    .optional()
-    .describe(
-      "Parent folder path. Required on create (either this or parentFolderId); ignored on edit.",
-    ),
-  siteId: z
-    .string()
-    .optional()
-    .describe(
-      "Site ID where this asset lives. One of siteId/siteName is required.",
-    ),
-  siteName: z
-    .string()
-    .optional()
-    .describe(
-      "Site name where this asset lives. One of siteId/siteName is required.",
-    ),
-  metadata: PassthroughRecord.optional().describe(
-    "Wired metadata fields (title, displayName, keywords, author, dynamicFields, etc.). Structure matches Cascade's Metadata type; dynamicFields is an array of `{ name, fieldValues: [{ value }] }`.",
-  ),
-  metadataSetId: z
-    .string()
-    .optional()
-    .describe(
-      "Metadata set ID. Priority: metadataSetId > metadataSetPath.",
-    ),
-  metadataSetPath: z
-    .string()
-    .optional()
-    .describe("Metadata set path. Alternative to metadataSetId."),
-  tags: z
-    .array(
-      z
-        .object({ name: z.string().describe("Tag string value.") })
-        .passthrough(),
-    )
-    .optional()
-    .describe("Content tags assigned to the asset. Array of `{ name }` objects."),
-  expirationFolderId: z
-    .string()
-    .optional()
-    .describe(
-      "Expiration folder ID. Priority: expirationFolderId > expirationFolderPath.",
-    ),
-  expirationFolderPath: z
-    .string()
-    .optional()
-    .describe("Expiration folder path. Works only for non-recycled assets."),
-  reviewOnSchedule: z
-    .boolean()
-    .optional()
-    .describe("Whether the asset should be reviewed on a schedule."),
-  reviewEvery: z
-    .number()
-    .optional()
-    .describe("Review interval in days."),
-};
+import {
+  PageEnvelopeSchema,
+  FileEnvelopeSchema,
+  FolderEnvelopeSchema,
+  SymlinkEnvelopeSchema,
+  ReferenceEnvelopeSchema,
+} from "./assets/content.js";
+import {
+  FeedBlockEnvelopeSchema,
+  IndexBlockEnvelopeSchema,
+  TextBlockEnvelopeSchema,
+  XhtmlDataDefinitionBlockEnvelopeSchema,
+  XmlBlockEnvelopeSchema,
+  TwitterFeedBlockEnvelopeSchema,
+} from "./assets/blocks.js";
+import {
+  XsltFormatEnvelopeSchema,
+  ScriptFormatEnvelopeSchema,
+  TemplateEnvelopeSchema,
+} from "./assets/formats.js";
+import {
+  UserEnvelopeSchema,
+  GroupEnvelopeSchema,
+  RoleEnvelopeSchema,
+} from "./assets/admin.js";
+import {
+  WordPressConnectorEnvelopeSchema,
+  GoogleAnalyticsConnectorEnvelopeSchema,
+} from "./assets/connectors.js";
+import {
+  FileSystemTransportEnvelopeSchema,
+  FtpTransportEnvelopeSchema,
+  DatabaseTransportEnvelopeSchema,
+  CloudTransportEnvelopeSchema,
+} from "./assets/transports.js";
+import {
+  WorkflowDefinitionEnvelopeSchema,
+  WorkflowEmailEnvelopeSchema,
+  WorkflowConfigurationEnvelopeSchema,
+} from "./assets/workflow.js";
+import {
+  AssetFactoryEnvelopeSchema,
+  ContentTypeEnvelopeSchema,
+  DestinationEnvelopeSchema,
+  EditorConfigurationEnvelopeSchema,
+  MetadataSetEnvelopeSchema,
+  PageConfigurationSetEnvelopeSchema,
+  PublishSetEnvelopeSchema,
+  DataDefinitionEnvelopeSchema,
+  SharedFieldEnvelopeSchema,
+  SiteEnvelopeSchema,
+} from "./assets/config.js";
+import {
+  AssetFactoryContainerEnvelopeSchema,
+  ContentTypeContainerEnvelopeSchema,
+  ConnectorContainerEnvelopeSchema,
+  PageConfigurationSetContainerEnvelopeSchema,
+  DataDefinitionContainerEnvelopeSchema,
+  SharedFieldContainerEnvelopeSchema,
+  MetadataSetContainerEnvelopeSchema,
+  PublishSetContainerEnvelopeSchema,
+  SiteDestinationContainerEnvelopeSchema,
+  TransportContainerEnvelopeSchema,
+  WorkflowDefinitionContainerEnvelopeSchema,
+  WorkflowEmailContainerEnvelopeSchema,
+} from "./assets/containers.js";
 
-/** Fields common to publishable assets (page, file, folder). */
-const publishableFields = {
-  shouldBePublished: z
-    .boolean()
-    .optional()
-    .describe("Whether this asset can be published (default: true)."),
-  shouldBeIndexed: z
-    .boolean()
-    .optional()
-    .describe("Whether this asset can be indexed (default: true)."),
-  lastPublishedDate: z
-    .string()
-    .optional()
-    .describe("Last published timestamp. Read-only; ignored on create/edit."),
-  lastPublishedBy: z
-    .string()
-    .optional()
-    .describe("User who last published this asset. Read-only."),
-};
+// ─── AssetInputSchema: the envelope union ───────────────────────────────────
 
-/** Raw strict object for the PAGE variant (used as a discriminated-union branch). */
-const PageAssetObject = z
-  .object({
-    type: z
-      .literal("page")
-      .describe("Discriminator: must be 'page' for a page asset."),
-    ...commonAssetFields,
-    ...publishableFields,
-    contentTypeId: z
-      .string()
-      .optional()
-      .describe(
-        "Content type ID. Priority: (contentTypeId > contentTypePath) > (configurationSetId > configurationSetPath). One of the four is REQUIRED.",
-      ),
-    contentTypePath: z
-      .string()
-      .optional()
-      .describe(
-        "Content type path (e.g. '/content-types/default'). Alternative to contentTypeId.",
-      ),
-    configurationSetId: z
-      .string()
-      .optional()
-      .describe(
-        "Page configuration set ID. Used when no content type is provided.",
-      ),
-    configurationSetPath: z
-      .string()
-      .optional()
-      .describe("Page configuration set path. Alternative to configurationSetId."),
-    structuredData: PassthroughRecord.optional().describe(
-      "Structured data content. A page has either `xhtml` OR `structuredData` (priority: xhtml > structuredData). Matches Cascade's StructuredData type.",
-    ),
-    xhtml: z
-      .string()
-      .optional()
-      .describe(
-        "XHTML content for a plain WYSIWYG page. Priority: xhtml > structuredData.",
-      ),
-    pageConfigurations: z
-      .array(PassthroughRecord)
-      .optional()
-      .describe(
-        "Page configurations holding page-level region/block/format assignments. Required on edit to preserve region assignments.",
-      ),
-    linkRewriting: z
-      .enum(["inherit", "absolute", "relative", "site-relative"])
-      .optional()
-      .describe(
-        "Link rewriting mode (default: 'inherit'). Controls how hyperlinks are rewritten on publish.",
-      ),
-  })
-  .strict();
-
-/** Raw strict object for the FILE variant. */
-const FileAssetObject = z
-  .object({
-    type: z
-      .literal("file")
-      .describe("Discriminator: must be 'file' for a file asset."),
-    ...commonAssetFields,
-    ...publishableFields,
-    text: z
-      .string()
-      .optional()
-      .describe(
-        "Plaintext file content. One of `text`/`data` is required. Priority: text > data.",
-      ),
-    data: z
-      .array(z.number().describe("Byte value (0-255)."))
-      .optional()
-      .describe(
-        "Binary content as a byte array (base64-encoded upstream). Used for non-text files.",
-      ),
-    rewriteLinks: z
-      .boolean()
-      .optional()
-      .describe("Whether to rewrite links in the file's content on publish."),
-    linkRewriting: z
-      .enum(["inherit", "absolute", "relative", "site-relative"])
-      .optional()
-      .describe("Link rewriting mode (default: 'inherit')."),
-  })
-  .strict();
-
-/** Raw strict object for the FOLDER variant. */
-const FolderAssetObject = z
-  .object({
-    type: z
-      .literal("folder")
-      .describe("Discriminator: must be 'folder' for a folder asset."),
-    ...commonAssetFields,
-    ...publishableFields,
-    children: z
-      .array(PassthroughRecord)
-      .optional()
-      .describe(
-        "Array of child identifiers contained in this folder. Read-only on create; used to reflect folder contents.",
-      ),
-    includeInStaleContent: z
-      .boolean()
-      .optional()
-      .describe("Whether this folder participates in stale-content reports."),
-  })
-  .strict();
-
-/** Raw strict object for the BLOCK variant. */
-const BlockAssetObject = z
-  .object({
-    type: z
-      .literal("block")
-      .describe("Discriminator: must be 'block' for a block asset."),
-    ...commonAssetFields,
-    subType: z
-      .string()
-      .optional()
-      .describe(
-        "Block sub-type (e.g. 'TEXT', 'XML', 'XHTML_DATADEFINITION', 'INDEX', 'FEED'). Determines which content field applies.",
-      ),
-    text: z
-      .string()
-      .optional()
-      .describe("Plaintext content for TEXT-type blocks."),
-    xml: z
-      .string()
-      .optional()
-      .describe("XML content for XML-type blocks."),
-    structuredData: PassthroughRecord.optional().describe(
-      "Structured data content for XHTML-datadefinition blocks. Priority: xhtml > structuredData.",
-    ),
-    xhtml: z
-      .string()
-      .optional()
-      .describe(
-        "XHTML content for plain WYSIWYG blocks. Priority: xhtml > structuredData.",
-      ),
-  })
-  .strict();
-
-/** Raw strict object for the SYMLINK variant. linkURL is required. */
-const SymlinkAssetObject = z
-  .object({
-    type: z
-      .literal("symlink")
-      .describe(
-        "Discriminator: must be 'symlink' for a symlink asset (a Cascade hyperlink asset, not a UNIX symlink).",
-      ),
-    ...commonAssetFields,
-    linkURL: z
-      .string()
-      .min(1, "linkURL is required for symlink")
-      .describe(
-        "Fully qualified URL this symlink points to (e.g. 'https://example.com').",
-      ),
-  })
-  .strict();
-
-/** Set of variant types whose parent-folder constraint is enforced. */
-const STRICT_VARIANT_TYPES = new Set([
-  "page",
-  "file",
-  "folder",
-  "block",
-  "symlink",
-]);
-
-/** Refinement: require either parentFolderId or parentFolderPath for strict variants. */
-function requireParentFolder<T extends z.ZodTypeAny>(schema: T) {
-  return schema.refine(
-    (v: {
-      type?: string;
-      parentFolderId?: string;
-      parentFolderPath?: string;
-    }) => {
-      if (!v.type || !STRICT_VARIANT_TYPES.has(v.type)) return true;
-      return v.parentFolderId !== undefined || v.parentFolderPath !== undefined;
-    },
-    {
-      message: "Either parentFolderId or parentFolderPath must be provided",
-      path: ["parentFolderId"],
-    },
-  );
-}
-
-/** Public-facing refined strict schemas for direct parse of single variants.
- * Production code consumes `AssetInputSchema` (the discriminated union);
- * these per-variant exports exist as a testing seam for variant-specific
- * coverage. */
-export const PageAssetSchema = requireParentFolder(PageAssetObject);
-export const FileAssetSchema = requireParentFolder(FileAssetObject);
-export const FolderAssetSchema = requireParentFolder(FolderAssetObject);
-export const BlockAssetSchema = requireParentFolder(BlockAssetObject);
-export const SymlinkAssetSchema = requireParentFolder(SymlinkAssetObject);
-
-/** Generic fallback — any entity type that is NOT one of the 5 strict variants.
- * Only the `type` discriminant is validated; every other field passes through.
+/**
+ * Envelope union over every type-keyed property on Cascade's `Asset`
+ * schema. The accepted shape is always `{ <oneTypeKey>: { ...fields } }`.
+ * Plain `z.union` — the discriminator is the object key itself, which
+ * `z.discriminatedUnion` cannot express (it requires a discriminator
+ * field).
  *
- * Types listed explicitly (rather than via `EntityTypeSchema.exclude(...)`) to
- * avoid TS2589 "excessively deep" instantiation when used in a discriminated
- * union. Keep in sync with `EntityTypeSchema`. */
-const RemainingEntityTypes = z
-  .enum([
-    "assetfactory",
-    "assetfactorycontainer",
-    "block_FEED",
-    "block_INDEX",
-    "block_TEXT",
-    "block_XHTML_DATADEFINITION",
-    "block_XML",
-    "block_TWITTER_FEED",
-    "connectorcontainer",
-    "twitterconnector",
-    "facebookconnector",
-    "wordpressconnector",
-    "googleanalyticsconnector",
-    "contenttype",
-    "contenttypecontainer",
-    "destination",
-    "editorconfiguration",
-    "group",
-    "message",
-    "metadataset",
-    "metadatasetcontainer",
-    "pageconfigurationset",
-    "pageconfiguration",
-    "pageregion",
-    "pageconfigurationsetcontainer",
-    "publishset",
-    "publishsetcontainer",
-    "reference",
-    "role",
-    "datadefinition",
-    "datadefinitioncontainer",
-    "sharedfield",
-    "sharedfieldcontainer",
-    "format",
-    "format_XSLT",
-    "format_SCRIPT",
-    "site",
-    "sitedestinationcontainer",
-    "target",
-    "template",
-    "transport",
-    "transport_fs",
-    "transport_ftp",
-    "transport_db",
-    "transport_cloud",
-    "transportcontainer",
-    "user",
-    "workflow",
-    "workflowdefinition",
-    "workflowdefinitioncontainer",
-    "workflowemail",
-    "workflowemailcontainer",
-    "xhtmlDataDefinitionBlock",
+ * Listing follows the order of the upstream `Asset` properties: workflow
+ * configuration, then blocks, content (file/folder/page), reference,
+ * formats, symlink, template, admin-area (user/group/role), asset factory,
+ * containers, content type, connectors, page configuration, data
+ * definition, shared field, metadata set, publish set, destinations,
+ * transports, workflow, twitter feed, site, editor configuration.
+ */
+export const AssetInputSchema = z
+  .union([
+    // Workflow (not technically an asset — but travels on the Asset object)
+    WorkflowConfigurationEnvelopeSchema,
+
+    // Blocks
+    FeedBlockEnvelopeSchema,
+    IndexBlockEnvelopeSchema,
+    TextBlockEnvelopeSchema,
+    XhtmlDataDefinitionBlockEnvelopeSchema,
+    XmlBlockEnvelopeSchema,
+    TwitterFeedBlockEnvelopeSchema,
+
+    // Core content
+    FileEnvelopeSchema,
+    FolderEnvelopeSchema,
+    PageEnvelopeSchema,
+    ReferenceEnvelopeSchema,
+
+    // Formats + template
+    XsltFormatEnvelopeSchema,
+    ScriptFormatEnvelopeSchema,
+    SymlinkEnvelopeSchema,
+    TemplateEnvelopeSchema,
+
+    // Admin-area principals
+    UserEnvelopeSchema,
+    GroupEnvelopeSchema,
+    RoleEnvelopeSchema,
+
+    // Asset factory + container
+    AssetFactoryEnvelopeSchema,
+    AssetFactoryContainerEnvelopeSchema,
+
+    // Content type + container
+    ContentTypeEnvelopeSchema,
+    ContentTypeContainerEnvelopeSchema,
+
+    // Connectors
+    ConnectorContainerEnvelopeSchema,
+    WordPressConnectorEnvelopeSchema,
+    GoogleAnalyticsConnectorEnvelopeSchema,
+
+    // Page configuration
+    PageConfigurationSetEnvelopeSchema,
+    PageConfigurationSetContainerEnvelopeSchema,
+
+    // Data definition + shared field
+    DataDefinitionEnvelopeSchema,
+    DataDefinitionContainerEnvelopeSchema,
+    SharedFieldEnvelopeSchema,
+    SharedFieldContainerEnvelopeSchema,
+
+    // Metadata set
+    MetadataSetEnvelopeSchema,
+    MetadataSetContainerEnvelopeSchema,
+
+    // Publish set
+    PublishSetEnvelopeSchema,
+    PublishSetContainerEnvelopeSchema,
+
+    // Destinations + transports
+    SiteDestinationContainerEnvelopeSchema,
+    DestinationEnvelopeSchema,
+    FileSystemTransportEnvelopeSchema,
+    FtpTransportEnvelopeSchema,
+    DatabaseTransportEnvelopeSchema,
+    CloudTransportEnvelopeSchema,
+    TransportContainerEnvelopeSchema,
+
+    // Workflow definitions + emails
+    WorkflowDefinitionEnvelopeSchema,
+    WorkflowDefinitionContainerEnvelopeSchema,
+    WorkflowEmailEnvelopeSchema,
+    WorkflowEmailContainerEnvelopeSchema,
+
+    // Site + editor configuration
+    SiteEnvelopeSchema,
+    EditorConfigurationEnvelopeSchema,
   ])
   .describe(
-    "Fallback discriminator for the 51 less-common asset types not covered by strict variants (page/file/folder/block/symlink).",
+    "Cascade asset payload. Wrap the asset under its envelope key — e.g. `{ page: {...} }`, `{ symlink: {...} }`, `{ textBlock: {...} }`. 48 envelope keys are accepted, one per concrete Cascade type. Matches the upstream `Asset` schema 1:1.",
   );
-
-export const GenericAssetSchema = z
-  .object({
-    type: RemainingEntityTypes,
-  })
-  .passthrough()
-  .describe(
-    "Fallback asset shape for uncommon entity types. Only `type` is validated; every other field passes through to Cascade, which returns structured errors on invalid payloads.",
-  );
-
-/** Discriminated union across all asset variants.
- * Uses the raw object schemas (not the refined wrappers) because
- * discriminatedUnion requires ZodObject branches. The parent-folder refinement
- * is re-applied on the union itself. */
-export const AssetInputSchema = requireParentFolder(
-  z
-    .discriminatedUnion("type", [
-      PageAssetObject,
-      FileAssetObject,
-      FolderAssetObject,
-      BlockAssetObject,
-      SymlinkAssetObject,
-      GenericAssetSchema,
-    ])
-    .describe(
-      "Cascade asset payload. The `type` field chooses the branch: 'page' | 'file' | 'folder' | 'block' | 'symlink' get strict schemas; every other entity type uses the passthrough fallback.",
-    ),
-);
 
 export type AssetInput = z.infer<typeof AssetInputSchema>;
+
+// ─── Re-exports of inner schemas + envelope schemas ────────────────────────
+//
+// External consumers (tests, documentation generators) may import either the
+// inner "asset body" schemas (e.g. `PageAssetSchema`) or the envelope
+// wrappers (`PageEnvelopeSchema`). Inner schemas describe just the fields
+// inside `{ page: { ... } }`; envelope schemas wrap an inner schema under
+// its keyed property.
+
+export {
+  // Content
+  PageAssetSchema,
+  FileAssetSchema,
+  FolderAssetSchema,
+  SymlinkAssetSchema,
+  ReferenceAssetSchema,
+  PageEnvelopeSchema,
+  FileEnvelopeSchema,
+  FolderEnvelopeSchema,
+  SymlinkEnvelopeSchema,
+  ReferenceEnvelopeSchema,
+} from "./assets/content.js";
+
+export {
+  // Blocks
+  FeedBlockAssetSchema,
+  IndexBlockAssetSchema,
+  TextBlockAssetSchema,
+  XhtmlDataDefinitionBlockAssetSchema,
+  XmlBlockAssetSchema,
+  TwitterFeedBlockAssetSchema,
+  FeedBlockEnvelopeSchema,
+  IndexBlockEnvelopeSchema,
+  TextBlockEnvelopeSchema,
+  XhtmlDataDefinitionBlockEnvelopeSchema,
+  XmlBlockEnvelopeSchema,
+  TwitterFeedBlockEnvelopeSchema,
+} from "./assets/blocks.js";
+
+export {
+  // Formats
+  XsltFormatAssetSchema,
+  ScriptFormatAssetSchema,
+  TemplateAssetSchema,
+  XsltFormatEnvelopeSchema,
+  ScriptFormatEnvelopeSchema,
+  TemplateEnvelopeSchema,
+} from "./assets/formats.js";
+
+export {
+  // Admin principals
+  UserAssetSchema,
+  GroupAssetSchema,
+  RoleAssetSchema,
+  GlobalAbilitiesSchema,
+  SiteAbilitiesSchema,
+  UserEnvelopeSchema,
+  GroupEnvelopeSchema,
+  RoleEnvelopeSchema,
+} from "./assets/admin.js";
+
+export {
+  // Connectors
+  WordPressConnectorAssetSchema,
+  GoogleAnalyticsConnectorAssetSchema,
+  WordPressConnectorEnvelopeSchema,
+  GoogleAnalyticsConnectorEnvelopeSchema,
+} from "./assets/connectors.js";
+
+export {
+  // Transports
+  FileSystemTransportAssetSchema,
+  FtpTransportAssetSchema,
+  DatabaseTransportAssetSchema,
+  CloudTransportAssetSchema,
+  FileSystemTransportEnvelopeSchema,
+  FtpTransportEnvelopeSchema,
+  DatabaseTransportEnvelopeSchema,
+  CloudTransportEnvelopeSchema,
+} from "./assets/transports.js";
+
+export {
+  // Workflow
+  WorkflowDefinitionAssetSchema,
+  WorkflowEmailAssetSchema,
+  WorkflowConfigurationSchema,
+  WorkflowDefinitionEnvelopeSchema,
+  WorkflowEmailEnvelopeSchema,
+  WorkflowConfigurationEnvelopeSchema,
+} from "./assets/workflow.js";
+
+export {
+  // Config / admin-area assets
+  AssetFactoryAssetSchema,
+  ContentTypeAssetSchema,
+  DestinationAssetSchema,
+  EditorConfigurationAssetSchema,
+  MetadataSetAssetSchema,
+  PageConfigurationSetAssetSchema,
+  PublishSetAssetSchema,
+  DataDefinitionAssetSchema,
+  SharedFieldAssetSchema,
+  SiteAssetSchema,
+  AssetFactoryEnvelopeSchema,
+  ContentTypeEnvelopeSchema,
+  DestinationEnvelopeSchema,
+  EditorConfigurationEnvelopeSchema,
+  MetadataSetEnvelopeSchema,
+  PageConfigurationSetEnvelopeSchema,
+  PublishSetEnvelopeSchema,
+  DataDefinitionEnvelopeSchema,
+  SharedFieldEnvelopeSchema,
+  SiteEnvelopeSchema,
+} from "./assets/config.js";
+
+export {
+  // Containers
+  AssetFactoryContainerAssetSchema,
+  ContentTypeContainerAssetSchema,
+  ConnectorContainerAssetSchema,
+  PageConfigurationSetContainerAssetSchema,
+  DataDefinitionContainerAssetSchema,
+  SharedFieldContainerAssetSchema,
+  MetadataSetContainerAssetSchema,
+  PublishSetContainerAssetSchema,
+  SiteDestinationContainerAssetSchema,
+  TransportContainerAssetSchema,
+  WorkflowDefinitionContainerAssetSchema,
+  WorkflowEmailContainerAssetSchema,
+  AssetFactoryContainerEnvelopeSchema,
+  ContentTypeContainerEnvelopeSchema,
+  ConnectorContainerEnvelopeSchema,
+  PageConfigurationSetContainerEnvelopeSchema,
+  DataDefinitionContainerEnvelopeSchema,
+  SharedFieldContainerEnvelopeSchema,
+  MetadataSetContainerEnvelopeSchema,
+  PublishSetContainerEnvelopeSchema,
+  SiteDestinationContainerEnvelopeSchema,
+  TransportContainerEnvelopeSchema,
+  WorkflowDefinitionContainerEnvelopeSchema,
+  WorkflowEmailContainerEnvelopeSchema,
+} from "./assets/containers.js";
+
+// ─── Nested + base field re-exports for documentation / advanced use ───────
+
+export {
+  TagSchema,
+  MetadataSchema,
+  StructuredDataSchema,
+  StructuredDataNodeSchema,
+  PageRegionSchema,
+  PageConfigurationSchema,
+} from "./assets/nested.js";
+
+export {
+  BaseAssetFields,
+  NamedAssetFields,
+  FolderContainedAssetFields,
+  DublinAwareAssetFields,
+  ExpiringAssetFields,
+  PublishableAssetFields,
+  ContaineredAssetFields,
+  BlockFields,
+} from "./assets/base.js";
+
+export * from "./assets/enums.js";

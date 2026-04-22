@@ -203,7 +203,7 @@ Every tool accepts an optional `response_format` parameter (`"markdown"` or `"js
 | Tool             | Read-only | Description                                                                                    |
 | ---------------- | :-------: | ---------------------------------------------------------------------------------------------- |
 | `cascade_read`   |    Yes    | Read an asset by identifier (id or path + type). Accepts `response_detail: "summary" \| "full"` (default `full`) — `summary` strips heavy fields like `xhtml`, `structuredData`, file `data`, `pageConfigurations`. |
-| `cascade_create` |    No     | Create a new asset (strict schemas for page/file/folder/block/symlink; passthrough for others) |
+| `cascade_create` |    No     | Create a new asset. Body is a typed envelope — one of 48 keys matching Cascade's `Asset` schema (e.g. `{ page: {...} }`, `{ textBlock: {...} }`, `{ site: {...} }`). |
 | `cascade_edit`   |    No     | Edit an existing asset                                                                         |
 | `cascade_remove` |    No     | Delete an asset (with optional workflow + delete parameters)                                   |
 | `cascade_move`   |    No     | Move and/or rename an asset                                                                    |
@@ -495,11 +495,12 @@ Response `structuredContent`:
   "tool": "cascade_create",
   "arguments": {
     "asset": {
-      "type": "page",
-      "name": "new-page",
-      "parentFolderPath": "/about",
-      "siteName": "www",
-      "contentTypePath": "/standard/content-type"
+      "page": {
+        "name": "new-page",
+        "parentFolderPath": "/about",
+        "siteName": "www",
+        "contentTypePath": "/standard/content-type"
+      }
     }
   }
 }
@@ -540,12 +541,17 @@ The raw Cascade response object is always passed through to `structuredContent` 
 
 ## Asset Input Schemas
 
-For `cascade_create` and `cascade_edit`, the `asset` field is a discriminated union on `type`:
+For `cascade_create` and `cascade_edit`, the `asset` field is a typed envelope that mirrors Cascade's native `Asset` schema 1:1:
 
-- **Strict schemas** for common types: `page`, `file`, `folder`, `block`, `symlink`. These enforce required fields (`name`, `parentFolderPath` or `parentFolderId`, `siteId` or `siteName`, type-specific fields like `contentTypePath` for pages or `linkURL` for symlinks).
-- **Passthrough fallback** for the 50+ other Cascade asset types (template, workflow, format, metadataset, etc.). The `type` field is validated against the full entity type enum; all other fields pass through to Cascade.
+```json
+{ "asset": { "<typeKey>": { /* ...fields... */ } } }
+```
 
-If Cascade returns a validation error for a passthrough asset, the error message surfaces directly in the MCP response.
+`<typeKey>` is one of 48 camelCase property names on Cascade's `Asset` object — for example `page`, `file`, `folder`, `symlink`, `textBlock`, `feedBlock`, `indexBlock`, `xhtmlDataDefinitionBlock`, `xmlBlock`, `twitterFeedBlock`, `reference`, `template`, `xsltFormat`, `scriptFormat`, `user`, `group`, `role`, `site`, `contentType`, `metadataSet`, `pageConfigurationSet`, `publishSet`, `dataDefinition`, `sharedField`, `destination`, `editorConfiguration`, `assetFactory`, `wordPressConnector`, `googleAnalyticsConnector`, `fileSystemTransport`, `ftpTransport`, `databaseTransport`, `cloudTransport`, `workflowDefinition`, `workflowEmail`, and the matching `*Container` types.
+
+Each envelope key maps to a strict Zod schema derived from the upstream OpenAPI spec: every declared field is modelled with its correct required/optional marker. Unknown keys are rejected so typos fail fast. Round-trip is symmetric — a response from `cascade_read` can be modified and sent straight back to `cascade_edit` without reshaping.
+
+If Cascade returns a validation error (for example, a create-time required field missing), the error message surfaces directly in the MCP response.
 
 ## Development
 
