@@ -14,6 +14,23 @@ describe("EntityTypeSchema", () => {
     expect(EntityTypeSchema.safeParse("block").success).toBe(true);
   });
 
+  test("should accept native block / format / transport / connector variants", () => {
+    expect(EntityTypeSchema.safeParse("block_XHTML_DATADEFINITION").success).toBe(true);
+    expect(EntityTypeSchema.safeParse("format_XSLT").success).toBe(true);
+    expect(EntityTypeSchema.safeParse("transport_ftp").success).toBe(true);
+    expect(EntityTypeSchema.safeParse("wordpressconnector").success).toBe(true);
+  });
+
+  test("should reject camelCase envelope keys that are not valid identifier types", () => {
+    // Envelope keys belong on the Asset body (asset.<key>), not in identifier.type.
+    // `xhtmlDataDefinitionBlock` is the most confusing: upstream EntityTypeString
+    // lists it by mistake, but Cascade does not accept it as an identifier type.
+    expect(EntityTypeSchema.safeParse("xhtmlDataDefinitionBlock").success).toBe(false);
+    expect(EntityTypeSchema.safeParse("xsltFormat").success).toBe(false);
+    expect(EntityTypeSchema.safeParse("ftpTransport").success).toBe(false);
+    expect(EntityTypeSchema.safeParse("wordPressConnector").success).toBe(false);
+  });
+
   test("should reject an unknown type value", () => {
     const res = EntityTypeSchema.safeParse("invalid_type");
     expect(res.success).toBe(false);

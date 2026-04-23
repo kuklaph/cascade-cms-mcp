@@ -2,7 +2,7 @@
  * Common Zod schemas shared across all Cascade CMS request schemas.
  *
  * Exports:
- *   - EntityTypeSchema: the 56-variant EntityTypeString union
+ *   - EntityTypeSchema: the EntityTypeString union used in identifier.type
  *   - PathSchema: an asset path with optional site id/name
  *   - IdentifierSchema: an asset identifier (id-or-path + required type)
  *   - ResponseFormatSchema: "markdown" | "json" (defaults to "markdown")
@@ -12,8 +12,32 @@
 import { z } from "zod";
 
 /**
- * The 56 entity types supported by Cascade. Mirrors
- * `cascade-cms-api/types/types.d.ts::EntityTypeString`.
+ * Cascade entity type strings — the values accepted by `identifier.type` and
+ * other identifier-level type fields.
+ *
+ * Cascade uses two parallel naming schemes for asset kinds that are easy to
+ * confuse:
+ *
+ *   - **EntityType strings** (this schema): lowercase or snake_case
+ *     identifiers used in identifier.type — e.g. 'page', 'file', 'folder',
+ *     'contenttype', 'editorconfiguration', 'metadataset',
+ *     'block_XHTML_DATADEFINITION', 'block_TEXT', 'format_XSLT',
+ *     'transport_ftp', 'wordpressconnector'.
+ *   - **Asset envelope keys** (see `src/schemas/assets.ts`): camelCase
+ *     property names on the Asset body — e.g. 'contentType',
+ *     'editorConfiguration', 'metadataSet', 'xhtmlDataDefinitionBlock',
+ *     'textBlock', 'xsltFormat', 'ftpTransport', 'wordPressConnector'.
+ *
+ * A handful of types ('page', 'file', 'folder', 'symlink', 'template',
+ * 'reference', 'destination', 'role', 'site', 'user', 'group', 'message',
+ * 'workflow', 'target', 'format', 'block', 'transport', 'pageregion',
+ * 'pageconfiguration') spell the same in both schemes; most do not. Only the
+ * EntityType strings are valid as identifier.type — envelope keys must not
+ * appear here.
+ *
+ * Mirrors `cascade-cms-api/types/types.d.ts::EntityTypeString`, minus the
+ * erroneous `xhtmlDataDefinitionBlock` entry upstream includes (an envelope
+ * key that Cascade does not accept as an identifier type).
  */
 export const EntityTypeSchema = z
   .enum([
@@ -74,10 +98,9 @@ export const EntityTypeSchema = z
     "workflowdefinitioncontainer",
     "workflowemail",
     "workflowemailcontainer",
-    "xhtmlDataDefinitionBlock",
   ])
   .describe(
-    "Cascade CMS asset type discriminator. Common values: 'page', 'file', 'folder', 'block', 'symlink'. 56 variants total covering all asset kinds (templates, formats, workflows, users, transports, etc.).",
+    "Cascade CMS asset type discriminator — used in identifier.type. Values are EntityType strings (lowercase or snake_case): 'page', 'file', 'folder', 'block', 'symlink', 'template', 'contenttype', 'editorconfiguration', 'metadataset', 'block_TEXT', 'block_XML', 'block_FEED', 'block_INDEX', 'block_XHTML_DATADEFINITION', 'block_TWITTER_FEED', 'format_XSLT', 'format_SCRIPT', 'transport_fs', 'transport_ftp', 'transport_db', 'transport_cloud', 'wordpressconnector', 'googleanalyticsconnector', etc. These are DISTINCT from the camelCase envelope keys used on the Asset body ('contentType', 'editorConfiguration', 'metadataSet', 'textBlock', 'xhtmlDataDefinitionBlock', 'xsltFormat', 'ftpTransport', 'wordPressConnector', etc.). A handful of types spell the same in both schemes ('page', 'file', 'folder', 'symlink', 'template', 'reference', 'site', 'user', 'group', 'role'); most do not. Only EntityType strings are valid here — never use an envelope key.",
   );
 
 export type EntityType = z.infer<typeof EntityTypeSchema>;
@@ -116,13 +139,13 @@ export const IdentifierSchema = z
       .string()
       .optional()
       .describe(
-        "Asset ID. Preferred over path because IDs survive when assets are moved or recycled. One of `id` or `path` is required.",
+        "Asset ID. Prefer this over path whenever the ID is known — IDs are stable across moves/renames and, when both are supplied, id takes precedence. One of `id` or `path` is required.",
       ),
     path: PathSchema.optional().describe(
-      "Asset path object (path + site). Works only for non-recycled assets. One of `id` or `path` is required.",
+      "Asset path object (path + site). A valid fallback when the id is unknown, or when working from a known path is more natural. Cascade resolves path→id server-side, so there is no need to read the asset first just to get the id. Works only for non-recycled assets. One of `id` or `path` is required.",
     ),
     type: EntityTypeSchema.describe(
-      "REQUIRED: The entity type of this asset (e.g. 'page', 'file', 'folder'). Determines how Cascade resolves the id/path.",
+      "REQUIRED: The entity type of this asset. Use the EntityType string (lowercase or snake_case) — NOT the camelCase envelope key used on the Asset body. A few types are spelled the same in both schemes ('page', 'file', 'folder', 'symlink', 'template', 'reference', 'site', 'user', 'group', 'role'), but most differ — e.g. identifier uses 'block_XHTML_DATADEFINITION' / 'block_TEXT' / 'format_XSLT' / 'transport_ftp' / 'contenttype' / 'editorconfiguration' / 'wordpressconnector', while the Asset body envelope uses 'xhtmlDataDefinitionBlock' / 'textBlock' / 'xsltFormat' / 'ftpTransport' / 'contentType' / 'editorConfiguration' / 'wordPressConnector'. See cascade://entity-types for the full list.",
     ),
     recycled: z
       .boolean()
@@ -137,7 +160,7 @@ export const IdentifierSchema = z
     path: ["id"],
   })
   .describe(
-    "Uniquely identifies a Cascade asset. Supply either `id` (preferred, survives moves/recycling) or `path` plus the asset `type`.",
+    "Uniquely identifies a Cascade asset. Supply either `id` (preferred when known) or `path` plus the asset `type`. This id-over-path preference applies to every id/path pair Cascade exposes (parentFolderId vs parentFolderPath, siteId vs siteName, etc.).",
   );
 
 export type Identifier = z.infer<typeof IdentifierSchema>;

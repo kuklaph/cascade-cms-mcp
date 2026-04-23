@@ -1,7 +1,7 @@
 /**
  * Message tools: 4 user-mailbox and subscription operations.
  *
- *   cascade_list_subscribers — list users subscribed to an asset
+ *   cascade_list_subscribers — list an asset's relationships (what references it) and notification subscribers
  *   cascade_list_messages    — list the authenticated user's messages
  *   cascade_mark_message     — change a message's read/archive state
  *   cascade_delete_message   — permanently delete a message
@@ -33,17 +33,22 @@ export function registerMessageTools(
 ): void {
   registerCascadeTool(server, {
     name: "cascade_list_subscribers",
-    title: "List Asset Subscribers",
+    title: "List Asset Relationships & Subscribers",
     description: buildCascadeToolDescription(
-      `List all users subscribed to notifications for a given asset.
+      `List the relationships an asset has — the other assets that reference it (\"what is using this?\") and the users subscribed to its notifications.
 
-Returns two arrays: auto-subscribers (users subscribed implicitly through ownership, workflow, or group membership) and manualSubscribers (users who explicitly opted in). Both arrays contain identifier references — names and IDs of the users/groups. Use this to audit notification reach before sending a message or publishing an asset.
+Cascade exposes two related discovery questions through this single endpoint:
+
+  1. "What relationships does this asset have?" — i.e. what references it: "which pages use this block?", "which pages link to this file?", "which content-types use this data definition?". The referenced asset is the query target; the assets that point at it show up in the response.
+  2. "Who gets notified when this asset changes?" — user/group subscribers, both auto (ownership/workflow/group) and manual (opt-in).
+
+Directionality matters: the lookup runs against the asset being referenced, NOT the asset doing the referencing. If a page embeds a block, query the BLOCK to find the page. Querying the page will NOT list its embedded blocks — it will list the assets that reference the page.
 
 Args:
-  - identifier (object, required): The asset whose subscribers to list
-    - id (string, optional): Asset ID (preferred)
-    - path (object, optional): { path, siteId OR siteName }
-    - type (string, required): Entity type of the asset
+  - identifier (object, required): The asset whose relationships/subscribers to list
+    - id (string, optional): Asset ID. Prefer id when known; Cascade auto-resolves path→id server-side when only path is given.
+    - path (object, optional): { path, siteId OR siteName } — valid fallback when id is unknown.
+    - type (string, required): Entity type of the asset. Use the EntityType string (e.g. "page", "block_XHTML_DATADEFINITION", "contenttype") — NOT the camelCase envelope key ("xhtmlDataDefinitionBlock", "contentType"). Most asset kinds differ between the two schemes; see IdentifierSchema.type / cascade://entity-types.
 
 Returns:
   Cascade OperationResult:
@@ -52,11 +57,14 @@ Returns:
     subscribers: [ { id, type, path: { path, siteId, siteName } }, ... ],
     manualSubscribers: [ { id, type, path: { path, siteId, siteName } }, ... ]
   }
+  Entries may be related assets (pages, content-types, ...) that reference this one, users subscribed to notifications, or both — distinguish by \`type\`.
   On failure: { success: false, message: "<error>" }
 
 Examples:
-  - Use when: "Who gets notified when /about is edited?" -> { identifier: { type: "folder", path: { path: "/about", siteName: "www" } } }
-  - Use when: "Audit manual subscriptions on a page" -> read manualSubscribers from the response.
+  - Use when: "What relationships does this block have?" / "Which pages use this block?" -> { identifier: { type: "block_XHTML_DATADEFINITION", id: "<blockId>" } } then inspect response entries.
+  - Use when: "Which assets link to this file?" -> { identifier: { type: "file", id: "<fileId>" } }.
+  - Use when: "Who gets notified when /about changes?" -> { identifier: { type: "folder", path: { path: "/about", siteName: "www" } } }.
+  - Don't use when: You want outbound relationships — i.e. "which blocks does this page embed?". That direction isn't queryable; read the page and inspect its body.
   - Don't use when: You want to read messages sent — use cascade_list_messages.
 
 Error Handling:
@@ -104,7 +112,7 @@ Returns:
 Examples:
   - Use when: "What's in my Cascade inbox?" -> {}
   - Use when: "Check if workflow messages are waiting" -> {} then filter messages by subject.
-  - Don't use when: You want subscribers to an asset — use cascade_list_subscribers.
+  - Don't use when: You want an asset's relationships or subscribers — use cascade_list_subscribers.
   - Don't use when: You want audit events — use cascade_read_audits.
 
 Pagination:

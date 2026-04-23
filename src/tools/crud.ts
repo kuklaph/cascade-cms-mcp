@@ -165,12 +165,16 @@ Error Handling:
 
 The request body wraps a typed envelope under \`asset\` — one of 48 envelope keys (page, file, folder, symlink, textBlock, feedBlock, indexBlock, xmlBlock, xhtmlDataDefinitionBlock, twitterFeedBlock, reference, template, xsltFormat, scriptFormat, user, group, role, assetFactory, contentType, destination, editorConfiguration, metadataSet, pageConfigurationSet, publishSet, dataDefinition, sharedField, site, workflowDefinition, workflowEmail, wordPressConnector, googleAnalyticsConnector, fileSystemTransport, ftpTransport, databaseTransport, cloudTransport, and the *Container types). This matches the upstream Cascade REST API \`Asset\` schema exactly. Returns the new asset's ID on success.
 
+Payload conventions (apply to every create call):
+  - Send ONLY the fields you actually need to set. Every optional field should be omitted unless you have a real value to provide — Cascade applies its own defaults server-side. Do not pad payloads with "reasonable defaults" like \`reviewOnSchedule: false\` or \`shouldBePublished: true\` when you do not need to override them.
+  - For every \`<thing>Id\` / \`<thing>Path\` pair (parentFolderId vs parentFolderPath, siteId vs siteName, contentTypeId vs contentTypePath, metadataSetId vs metadataSetPath, ...), prefer the id form when you know the id. Path is a valid fallback and Cascade resolves it server-side — don't round-trip through cascade_read just to look up an id.
+
 Args:
   - asset (object, required): Single-key envelope. Key is the camelCase type; value is the asset body.
-    Common shapes:
-      - { page: { name, parentFolderId OR parentFolderPath, siteId OR siteName, contentTypeId OR contentTypePath, metadata?, structuredData? OR xhtml?, ... } }
+    Common shapes (only required fields shown — add optionals only when you need to set them):
+      - { page: { name, parentFolderId OR parentFolderPath, siteId OR siteName, contentTypeId OR contentTypePath, ... } }
       - { file: { name, parentFolderId OR parentFolderPath, siteId OR siteName, text? OR data?, ... } }
-      - { folder: { name, parentFolderId OR parentFolderPath, siteId OR siteName, metadata?, ... } }
+      - { folder: { name, parentFolderId OR parentFolderPath, siteId OR siteName, ... } }
       - { textBlock: { name, parentFolderId OR parentFolderPath, siteId OR siteName, text, ... } }
       - { xmlBlock: { name, parentFolderId OR parentFolderPath, siteId OR siteName, xml, ... } }
       - { symlink: { name, parentFolderId OR parentFolderPath, siteId OR siteName, linkURL, ... } }
@@ -211,6 +215,11 @@ Error Handling:
       `Edit an existing Cascade CMS asset.
 
 Accepts the full asset body (same envelope shape as cascade_create). The workflow is symmetric: cascade_read returns { asset: { <typeKey>: {...} } }; modify the inner object; pass the same envelope back to cascade_edit. Some asset types require a prior cascade_check_out.
+
+Payload conventions:
+  - Edit replaces the asset body, so send the full object as read — do not try to send only the fields you are changing.
+  - When constructing an edit payload from scratch (not round-tripping a read), still omit optional fields you have no intention of setting; don't invent defaults.
+  - Prefer id over path on every id/path pair (metadataSetId over metadataSetPath, etc.). Cascade resolves paths server-side.
 
 Args:
   - asset (object, required): Single-key envelope (same as cascade_create). Inner object must include \`id\` to identify the existing asset.

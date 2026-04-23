@@ -14,6 +14,7 @@ import {
   RoleAssetSchema,
   AssetInputSchema,
 } from "../../../src/schemas/assets.js";
+import { EntityTypeStringSchema } from "../../../src/schemas/assets/enums.js";
 
 // ─── Inner asset schemas (content) ──────────────────────────────────────────
 
@@ -399,5 +400,23 @@ describe("AssetInputSchema (envelope union)", () => {
 describe("AssetInputSchema description", () => {
   test("carries a description for agent guidance", () => {
     expect((AssetInputSchema as unknown as { _def: { description?: string } })._def.description).toBeTruthy();
+  });
+});
+
+// ─── EntityTypeStringSchema (identifier-level — not envelope keys) ──────────
+
+describe("EntityTypeStringSchema (Reference.referencedAssetType)", () => {
+  test("accepts native EntityType strings", () => {
+    expect(EntityTypeStringSchema.safeParse("page").success).toBe(true);
+    expect(EntityTypeStringSchema.safeParse("block_XHTML_DATADEFINITION").success).toBe(true);
+    expect(EntityTypeStringSchema.safeParse("format_XSLT").success).toBe(true);
+    expect(EntityTypeStringSchema.safeParse("transport_ftp").success).toBe(true);
+  });
+
+  test("rejects camelCase envelope keys", () => {
+    // Envelope keys live on the Asset body, not in identifier-level type fields.
+    expect(EntityTypeStringSchema.safeParse("xhtmlDataDefinitionBlock").success).toBe(false);
+    expect(EntityTypeStringSchema.safeParse("xsltFormat").success).toBe(false);
+    expect(EntityTypeStringSchema.safeParse("ftpTransport").success).toBe(false);
   });
 });

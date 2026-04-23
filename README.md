@@ -238,14 +238,16 @@ Every tool accepts an optional `response_format` parameter (`"markdown"` or `"js
 | `cascade_read_workflow_information`   |    Yes    | Read in-flight workflow info for an asset |
 | `cascade_perform_workflow_transition` |    No     | Advance a workflow to its next action     |
 
-### Messages & Subscribers
+### Messages, Relationships & Subscribers
 
-| Tool                       | Read-only | Description                                                     |
-| -------------------------- | :-------: | --------------------------------------------------------------- |
-| `cascade_list_subscribers` |    Yes    | List users subscribed to an asset                               |
-| `cascade_list_messages`    |    Yes    | List in-Cascade messages for the authenticated user (paginated) |
-| `cascade_mark_message`     |    No     | Mark a message as read/unread/archive/unarchive                 |
-| `cascade_delete_message`   |    No     | Permanently delete a message                                    |
+| Tool                       | Read-only | Description                                                                             |
+| -------------------------- | :-------: | --------------------------------------------------------------------------------------- |
+| `cascade_list_subscribers` |    Yes    | List an asset's relationships (what references it) and notification subscribers         |
+| `cascade_list_messages`    |    Yes    | List in-Cascade messages for the authenticated user (paginated)                         |
+| `cascade_mark_message`     |    No     | Mark a message as read/unread/archive/unarchive                                         |
+| `cascade_delete_message`   |    No     | Permanently delete a message                                                            |
+
+> `cascade_list_subscribers` answers "what relationships does this asset have?" — i.e. which other assets reference it. The lookup is **inbound**: query the asset being referenced to find the assets that point at it (pass a block's identifier to find the pages that embed it). The outbound direction — "which blocks does this page embed?" — is not queryable; read the page and inspect its body.
 
 ### Check In / Check Out
 
@@ -550,6 +552,8 @@ For `cascade_create` and `cascade_edit`, the `asset` field is a typed envelope t
 `<typeKey>` is one of 48 camelCase property names on Cascade's `Asset` object — for example `page`, `file`, `folder`, `symlink`, `textBlock`, `feedBlock`, `indexBlock`, `xhtmlDataDefinitionBlock`, `xmlBlock`, `twitterFeedBlock`, `reference`, `template`, `xsltFormat`, `scriptFormat`, `user`, `group`, `role`, `site`, `contentType`, `metadataSet`, `pageConfigurationSet`, `publishSet`, `dataDefinition`, `sharedField`, `destination`, `editorConfiguration`, `assetFactory`, `wordPressConnector`, `googleAnalyticsConnector`, `fileSystemTransport`, `ftpTransport`, `databaseTransport`, `cloudTransport`, `workflowDefinition`, `workflowEmail`, and the matching `*Container` types.
 
 Each envelope key maps to a strict Zod schema derived from the upstream OpenAPI spec: every declared field is modelled with its correct required/optional marker. Unknown keys are rejected so typos fail fast. Round-trip is symmetric — a response from `cascade_read` can be modified and sent straight back to `cascade_edit` without reshaping.
+
+> **Envelope key vs EntityType string.** Cascade uses two parallel naming schemes. The camelCase **envelope keys** above (`xhtmlDataDefinitionBlock`, `xsltFormat`, `ftpTransport`, `contentType`, `editorConfiguration`, `wordPressConnector`, ...) are body-shape discriminators under `asset.<key>`. The lowercase / snake_case **EntityType strings** (`block_XHTML_DATADEFINITION`, `format_XSLT`, `transport_ftp`, `contenttype`, `editorconfiguration`, `wordpressconnector`, ...) are the values used in `identifier.type` for `cascade_read`, `cascade_move`, `cascade_list_subscribers`, and similar. A handful of types spell the same in both schemes (`page`, `file`, `folder`, `symlink`, `template`, `reference`, `site`, `user`, `group`, `role`); most do not. Never interchange them — see the `cascade://entity-types` resource for the full EntityType list.
 
 If Cascade returns a validation error (for example, a create-time required field missing), the error message surfaces directly in the MCP response.
 

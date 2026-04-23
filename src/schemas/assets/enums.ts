@@ -166,10 +166,20 @@ export const StructuredDataAssetTypeSchema = z
 // ─── Entity type (identifier-level) ─────────────────────────────────────────
 //
 // Re-exported for use inside asset payloads that reference other assets by
-// type (e.g. Reference.referencedAssetType). This enum is Cascade's
-// `EntityTypeString` from openapi.yaml line 149. Distinct from Asset envelope
-// keys (see AssetEnvelopeKeySchema) — entity types are lowercase identifiers,
-// envelope keys are camelCase property names on the Asset object.
+// type (e.g. Reference.referencedAssetType). Based on Cascade's
+// `EntityTypeString` from openapi.yaml line 149.
+//
+// Cascade uses two parallel naming schemes: EntityType strings (this schema —
+// lowercase or snake_case, e.g. 'block_XHTML_DATADEFINITION', 'format_XSLT',
+// 'transport_ftp', 'wordpressconnector') are the values used in identifier
+// type fields; Asset envelope keys (see `src/schemas/assets.ts` — camelCase,
+// e.g. 'xhtmlDataDefinitionBlock', 'xsltFormat', 'ftpTransport',
+// 'wordPressConnector') are body-shape discriminators under `asset.<key>`.
+// A handful of types spell the same in both schemes ('page', 'file',
+// 'folder', 'symlink', 'template', ...); most do not. The upstream
+// `EntityTypeString` incorrectly includes the envelope key
+// `xhtmlDataDefinitionBlock`; it is excluded here because Cascade does not
+// accept it as an identifier-level type.
 
 export const EntityTypeStringSchema = z
   .enum([
@@ -230,10 +240,9 @@ export const EntityTypeStringSchema = z
     "workflowemailcontainer",
     "facebookconnector",
     "twitterconnector",
-    "xhtmlDataDefinitionBlock",
   ])
   .describe(
-    "Cascade entity type string — used in Identifier.type and Reference.referencedAssetType. Distinct from Asset envelope keys.",
+    "Cascade entity type string — used in Identifier.type and Reference.referencedAssetType. Values are lowercase or snake_case (e.g. 'page', 'block_XHTML_DATADEFINITION', 'format_XSLT', 'transport_ftp', 'wordpressconnector'). These are DISTINCT from the camelCase envelope keys on the Asset body ('xhtmlDataDefinitionBlock', 'xsltFormat', 'ftpTransport', 'wordPressConnector'). A few types ('page', 'file', 'folder', 'symlink', 'template', 'reference', 'role', 'site', 'user', 'group') spell the same in both; most do not. Never use an envelope key here.",
   );
 
 export type EntityTypeString = z.infer<typeof EntityTypeStringSchema>;

@@ -83,7 +83,6 @@ const ENTITY_TYPE_DESCRIPTIONS: Record<string, string> = {
   workflowdefinitioncontainer: "Folder-like container holding workflow definitions",
   workflowemail: "An email template used by workflows",
   workflowemailcontainer: "Folder-like container holding workflow emails",
-  xhtmlDataDefinitionBlock: "XHTML block bound to a data definition (alias of block_XHTML_DATADEFINITION)",
 };
 
 /**
