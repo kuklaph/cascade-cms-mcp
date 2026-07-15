@@ -122,6 +122,19 @@ type MutationPlanStep = {
   save_as?: string;
 };
 
+type DraftApprovalFields = {
+  cascade_url: string | null;
+  asset_title: string | null;
+  asset_display_name: string | null;
+  asset_path: string | null;
+  asset_parent_id: string | null;
+  asset_parent_path: string | null;
+  asset_type: string;
+  asset_name: string | null;
+  asset_site_name: string | null;
+  asset_site_id: string | null;
+};
+
 export function registerDraftTools(
   server: McpServer,
   client: CascadeClient,
@@ -158,10 +171,12 @@ export function registerDraftTools(
       );
       draft = draftCache.createFromAsset("create", args.asset ?? {});
     }
+    const approvalFields = draftApprovalFields(draft, resolved.cascadeBrowserUrl);
     return {
       success: true,
       ...draftSummary(draft),
-      next_actions: draftNextActions(draft),
+      ...approvalFields,
+      next_actions: draftNextActions(draft, approvalFields),
     };
   }
 
@@ -181,14 +196,20 @@ export function registerDraftTools(
       resolved,
     );
     const draft = draftCache.createFromAsset("create", scaffold.asset);
+    const approvalFields = draftApprovalFields(draft, resolved.cascadeBrowserUrl);
     return {
       success: true,
       ...draftSummary(draft),
+      ...approvalFields,
       scaffold: scaffold.asset,
       required_value_pointers: scaffold.required_value_pointers,
       relationship_groups: scaffold.relationship_groups,
       notes: scaffold.notes,
-      next_actions: createScaffoldNextActions(draft, scaffold.required_value_pointers),
+      next_actions: createScaffoldNextActions(
+        draft,
+        scaffold.required_value_pointers,
+        approvalFields,
+      ),
     };
   }
 
@@ -221,17 +242,19 @@ export function registerDraftTools(
     );
     await assertToolBlockAllowed("create", { asset: scaffold.asset }, resolved);
     const draft = draftCache.createFromAsset("create", scaffold.asset);
+    const approvalFields = draftApprovalFields(draft, resolved.cascadeBrowserUrl);
 
     return {
       success: true,
       ...draftSummary(draft),
+      ...approvalFields,
       source_asset_handle: entry.handle,
       source_raw_hash: entry.rawHash,
       scaffold: scaffold.asset,
       cleared_value_pointers: scaffold.cleared_value_pointers,
       replace_value_pointers: scaffold.replace_value_pointers,
       add_value_pointers: scaffold.add_value_pointers,
-      next_actions: createScaffoldFromAssetNextActions(draft, scaffold),
+      next_actions: createScaffoldFromAssetNextActions(draft, scaffold, approvalFields),
     };
   }
 
@@ -348,8 +371,12 @@ export function registerDraftTools(
     draft_handle: string;
     expected_revision: number;
     discard_on_success?: boolean;
-  }): Promise<Record<string, unknown>> {
+  } & DraftApprovalFields): Promise<Record<string, unknown>> {
     const draft = getDraftEntry(draftCache, args.draft_handle);
+    assertDraftApprovalFieldsMatch(
+      args,
+      draftApprovalFields(draft, resolved.cascadeBrowserUrl),
+    );
     if (args.expected_revision !== draft.revision) {
       throw new Error(
         `expected_revision ${args.expected_revision} does not match current draft revision ${draft.revision}.`,
@@ -620,7 +647,7 @@ export function registerDraftTools(
           materializeDraftRoot(draft, "placeholder"),
           resolved,
         );
-        return validateDraft(draft);
+        return validateDraft(draft, draftApprovalFields(draft, resolved.cascadeBrowserUrl));
       }
       case "local_draft_submit":
         return submitDraft(parsed as any);
@@ -888,7 +915,7 @@ export function registerDraftTools(
         materializeDraftRoot(draft, "placeholder"),
         resolved,
       );
-      return validateDraft(draft);
+      return validateDraft(draft, draftApprovalFields(draft, resolved.cascadeBrowserUrl));
     },
   }, resolved);
 
@@ -912,7 +939,7 @@ export function registerDraftTools(
     name: "local_draft_submit",
     title: "Submit asset draft",
     description: buildCascadeToolDescription(
-      `Validate the current draft with the normal create/edit schema, check tool-block rules against the complete payload as local_draft_submit and the resolved create or edit operation, then call Cascade with the full { asset } request.`,
+      `Validate the current draft with the normal create/edit schema, verify the approval context matches the current draft target and metadata, check tool-block rules against the complete payload as local_draft_submit and the resolved create or edit operation, then call Cascade with the full { asset } request. After any patch that could change approval context, copy the final approval values from local_draft_validate.`,
     ),
     inputSchema: DraftSubmitRequestSchema,
     annotations: {
@@ -1425,7 +1452,10 @@ function parseDraftRequest(
   };
 }
 
-function validateDraft(entry: DraftCacheEntry): Record<string, unknown> & {
+function validateDraft(
+  entry: DraftCacheEntry,
+  approvalFields: DraftApprovalFields,
+): Record<string, unknown> & {
   valid: boolean;
   issues?: DraftValidationIssue[];
 } {
@@ -1437,6 +1467,7 @@ function validateDraft(entry: DraftCacheEntry): Record<string, unknown> & {
       draft_handle: entry.handle,
       operation: entry.operation,
       revision: entry.revision,
+      ...approvalFields,
       ...(entry.fileData
         ? {
             file_data_attached: true,
@@ -1451,8 +1482,91 @@ function validateDraft(entry: DraftCacheEntry): Record<string, unknown> & {
     draft_handle: entry.handle,
     operation: entry.operation,
     revision: entry.revision,
+    ...approvalFields,
     issues: parsed.issues,
   };
+}
+
+function draftCascadeUrl(
+  entry: DraftCacheEntry,
+  browserUrl: string | undefined,
+): string | null {
+  if (entry.operation !== "edit" || !browserUrl || !entry.sourceIdentifier?.id) {
+    return null;
+  }
+  const root = browserUrl.replace(/\/+$/, "");
+  const id = encodeURIComponent(entry.sourceIdentifier.id);
+  const type = encodeURIComponent(entry.sourceIdentifier.type);
+  return `${root}/entity/open.act?id=${id}&type=${type}`;
+}
+
+function draftApprovalFields(
+  entry: DraftCacheEntry,
+  browserUrl: string | undefined,
+): DraftApprovalFields {
+  const asset = entry.index.asset;
+  const metadata = asset && isRecord(asset.metadata) ? asset.metadata : undefined;
+  return {
+    cascade_url: draftCascadeUrl(entry, browserUrl),
+    asset_title: firstString(metadata?.title, asset?.title),
+    asset_display_name: firstString(metadata?.displayName, asset?.displayName),
+    asset_path: draftAssetPath(asset),
+    asset_parent_id: firstString(asset?.parentFolderId, asset?.parentContainerId),
+    asset_parent_path: firstString(
+      asset?.parentFolderPath,
+      asset?.parentContainerPath,
+    ),
+    asset_type: entry.index.assetType,
+    asset_name: firstString(asset?.name, asset?.username, asset?.groupName),
+    asset_site_name: firstString(asset?.siteName),
+    asset_site_id: firstString(asset?.siteId),
+  };
+}
+
+function draftAssetPath(asset: Record<string, unknown> | undefined): string | null {
+  if (!asset) return null;
+  if (typeof asset.path === "string") return asset.path;
+  if (typeof asset.name !== "string") return null;
+  const parentPath = firstString(asset.parentFolderPath, asset.parentContainerPath);
+  if (parentPath === null) return null;
+  const normalizedParent =
+    parentPath !== "/" && parentPath.endsWith("/")
+      ? parentPath.slice(0, -1)
+      : parentPath;
+  return normalizedParent === "/"
+    ? `/${asset.name}`
+    : `${normalizedParent}/${asset.name}`;
+}
+
+function firstString(...values: unknown[]): string | null {
+  for (const value of values) {
+    if (typeof value === "string") return value;
+  }
+  return null;
+}
+
+function assertDraftApprovalFieldsMatch(
+  actual: DraftApprovalFields,
+  expected: DraftApprovalFields,
+): void {
+  const fields = [
+    "cascade_url",
+    "asset_title",
+    "asset_display_name",
+    "asset_path",
+    "asset_parent_id",
+    "asset_parent_path",
+    "asset_type",
+    "asset_name",
+    "asset_site_name",
+    "asset_site_id",
+  ] as const;
+  for (const field of fields) {
+    if (actual[field] === expected[field]) continue;
+    throw new Error(
+      `${field} does not match the current draft. Copy the approval fields from local_draft_open or local_draft_validate before submitting.`,
+    );
+  }
 }
 
 async function assertToolBlockAllowed(
@@ -1606,7 +1720,10 @@ function cascadeResultSucceeded(result: unknown): boolean {
   );
 }
 
-function draftNextActions(entry: DraftCacheEntry): Array<Record<string, unknown>> {
+function draftNextActions(
+  entry: DraftCacheEntry,
+  approvalFields: DraftApprovalFields,
+): Array<Record<string, unknown>> {
   return [
     {
       tool: "local_draft_get_value",
@@ -1641,7 +1758,25 @@ function draftNextActions(entry: DraftCacheEntry): Array<Record<string, unknown>
     {
       tool: "local_draft_submit",
       reason: "Submit the complete draft through create or edit.",
-      required_inputs: ["draft_handle", "expected_revision"],
+      required_inputs: [
+        "cascade_url",
+        "asset_title",
+        "asset_display_name",
+        "asset_path",
+        "asset_parent_id",
+        "asset_parent_path",
+        "asset_type",
+        "asset_name",
+        "asset_site_name",
+        "asset_site_id",
+        "draft_handle",
+        "expected_revision",
+      ],
+      input: {
+        ...approvalFields,
+        draft_handle: entry.handle,
+        expected_revision: entry.revision,
+      },
     },
   ];
 }
@@ -1649,6 +1784,7 @@ function draftNextActions(entry: DraftCacheEntry): Array<Record<string, unknown>
 function createScaffoldNextActions(
   entry: DraftCacheEntry,
   requiredValuePointers: string[],
+  approvalFields: DraftApprovalFields,
 ): Array<Record<string, unknown>> {
   return [
     {
@@ -1669,7 +1805,25 @@ function createScaffoldNextActions(
     {
       tool: "local_draft_submit",
       reason: "Submit the complete create draft through create.",
-      required_inputs: ["draft_handle", "expected_revision"],
+      required_inputs: [
+        "cascade_url",
+        "asset_title",
+        "asset_display_name",
+        "asset_path",
+        "asset_parent_id",
+        "asset_parent_path",
+        "asset_type",
+        "asset_name",
+        "asset_site_name",
+        "asset_site_id",
+        "draft_handle",
+        "expected_revision",
+      ],
+      input: {
+        ...approvalFields,
+        draft_handle: entry.handle,
+        expected_revision: entry.revision,
+      },
     },
   ];
 }
@@ -1677,6 +1831,7 @@ function createScaffoldNextActions(
 function createScaffoldFromAssetNextActions(
   entry: DraftCacheEntry,
   scaffold: CreateScaffoldFromAsset,
+  approvalFields: DraftApprovalFields,
 ): Array<Record<string, unknown>> {
   return [
     {
@@ -1698,7 +1853,25 @@ function createScaffoldFromAssetNextActions(
     {
       tool: "local_draft_submit",
       reason: "Submit the complete create draft through create.",
-      required_inputs: ["draft_handle", "expected_revision"],
+      required_inputs: [
+        "cascade_url",
+        "asset_title",
+        "asset_display_name",
+        "asset_path",
+        "asset_parent_id",
+        "asset_parent_path",
+        "asset_type",
+        "asset_name",
+        "asset_site_name",
+        "asset_site_id",
+        "draft_handle",
+        "expected_revision",
+      ],
+      input: {
+        ...approvalFields,
+        draft_handle: entry.handle,
+        expected_revision: entry.revision,
+      },
     },
   ];
 }

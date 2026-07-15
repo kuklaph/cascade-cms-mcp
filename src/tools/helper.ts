@@ -41,6 +41,7 @@ export interface CascadeDeps {
   draftCache?: DraftCache;
   toolBlockStore?: ToolBlockStore;
   browserSession?: BrowserSession;
+  cascadeBrowserUrl?: string;
 }
 
 /**

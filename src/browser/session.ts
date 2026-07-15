@@ -1,7 +1,6 @@
 import type { Config } from "../config.js";
 import { checkDraft } from "./checkDraft.js";
 import {
-  assertTrustedBrowserRootUrl,
   browserBaseUrlFromApiUrl,
   BrowserSessionExpiredError,
   cookieHeader,
@@ -9,7 +8,7 @@ import {
   getSetCookieHeaders,
   getTimeZoneOffset,
   isLoginPageResponse,
-  normalizeBrowserRootUrl,
+  resolveBrowserRootUrl,
 } from "./http.js";
 import {
   createSnippet,
@@ -33,7 +32,7 @@ import type {
   TimeoutSignalFactory,
 } from "./types.js";
 
-export { browserBaseUrlFromApiUrl } from "./http.js";
+export { browserBaseUrlFromApiUrl, resolveBrowserRootUrl } from "./http.js";
 
 export function createBrowserSession(
   config: Config,
@@ -46,7 +45,6 @@ export function createBrowserSession(
 
 class BrowserApiSession implements BrowserSession {
   private readonly browserUrl: string;
-  private readonly apiUrl: string;
   private readonly username?: string;
   private readonly password?: string;
   private readonly defaultSiteId?: string;
@@ -63,10 +61,7 @@ class BrowserApiSession implements BrowserSession {
     timeoutSignal: TimeoutSignalFactory,
     throttleOptions?: BrowserRequestThrottleOptions,
   ) {
-    this.apiUrl = config.url;
-    this.browserUrl = config.browserUrl
-      ? normalizeBrowserRootUrl(config.browserUrl)
-      : browserBaseUrlFromApiUrl(config.url);
+    this.browserUrl = resolveBrowserRootUrl(config.url, config.browserUrl);
     this.username = config.browserUsername;
     this.password = config.browserPassword;
     this.defaultSiteId = config.browserSiteId;
@@ -78,7 +73,6 @@ class BrowserApiSession implements BrowserSession {
 
   async login(args: { siteId?: string }): Promise<BrowserLoginResult> {
     this.assertConfigured();
-    assertTrustedBrowserRootUrl(this.browserUrl, this.apiUrl);
     const siteId = this.resolveSiteId(args.siteId);
     this.cookies.clear();
     this.authenticated = false;

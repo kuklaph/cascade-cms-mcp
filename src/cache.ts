@@ -10,7 +10,7 @@
  */
 
 import {
-  CACHE_MAX_BYTES_PER_ENTRY,
+  CACHE_MAX_CHARACTERS_PER_ENTRY,
   OVERSIZE_RESPONSE_CACHE_MAX_ENTRIES,
 } from "./constants.js";
 
@@ -28,6 +28,11 @@ export interface ResponseCache {
 
 export interface ResponseCacheOptions {
   maxEntries?: number;
+  maxCharactersPerEntry?: number;
+  /**
+   * @deprecated Use maxCharactersPerEntry. This limit counts UTF-16 code
+   * units, not bytes.
+   */
   maxBytesPerEntry?: number;
 }
 
@@ -35,14 +40,17 @@ export function createResponseCache(
   opts?: ResponseCacheOptions,
 ): ResponseCache {
   const maxEntries = opts?.maxEntries ?? OVERSIZE_RESPONSE_CACHE_MAX_ENTRIES;
-  const maxBytesPerEntry = opts?.maxBytesPerEntry ?? CACHE_MAX_BYTES_PER_ENTRY;
+  const maxCharactersPerEntry =
+    opts?.maxCharactersPerEntry ??
+    opts?.maxBytesPerEntry ??
+    CACHE_MAX_CHARACTERS_PER_ENTRY;
   const store = new Map<string, CachedEntry>();
 
   function put(toolName: string, fullText: string): string {
     const handle = `h_${globalThis.crypto.randomUUID()}`;
     const safeText =
-      fullText.length > maxBytesPerEntry
-        ? `[entry too large to cache: ${fullText.length} bytes exceeds limit ${maxBytesPerEntry}]`
+      fullText.length > maxCharactersPerEntry
+        ? `[entry too large to cache: ${fullText.length} characters exceeds limit ${maxCharactersPerEntry}]`
         : fullText;
 
     store.set(handle, {

@@ -178,6 +178,9 @@ function createOversizeEnvelope(
   return {
     truncated: true,
     preview: fullText.slice(0, previewLength),
+    characters_total: fullText.length,
+    characters_returned: previewLength,
+    // Deprecated compatibility aliases. These values are not byte counts.
     bytes_total: fullText.length,
     bytes_returned: previewLength,
     ...(handle ? { handle, tool: "read_response" as const } : {}),
@@ -185,7 +188,7 @@ function createOversizeEnvelope(
       ? [
           {
             tool: "read_response",
-            reason: "Retrieve additional bytes from this cached JSON response.",
+            reason: "Retrieve additional characters from this cached JSON response.",
             input: { handle, offset: previewLength },
           },
         ]

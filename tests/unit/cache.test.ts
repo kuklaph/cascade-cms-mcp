@@ -1,6 +1,7 @@
 import { describe, test, expect } from "bun:test";
 import { createResponseCache } from "../../src/cache.js";
 import {
+  CACHE_MAX_CHARACTERS_PER_ENTRY,
   CACHE_MAX_BYTES_PER_ENTRY,
   OVERSIZE_RESPONSE_CACHE_MAX_ENTRIES,
 } from "../../src/constants.js";
@@ -109,6 +110,18 @@ describe("createResponseCache", () => {
     expect(entry!.fullText).toContain("100");
   });
 
+  test("should prefer the accurately named maxCharactersPerEntry option", () => {
+    const cache = createResponseCache({
+      maxCharactersPerEntry: 100,
+      maxBytesPerEntry: 1_000,
+    });
+
+    const handle = cache.put("tool", "x".repeat(101));
+    const entry = cache.get(handle);
+
+    expect(entry!.fullText).toContain("101 characters exceeds limit 100");
+  });
+
   test("should work without any constructor opts (production defaults)", () => {
     const cache = createResponseCache();
 
@@ -128,6 +141,7 @@ describe("createResponseCache", () => {
     expect(cache.size()).toBeLessThanOrEqual(OVERSIZE_RESPONSE_CACHE_MAX_ENTRIES);
     // Sanity: the default maxBytesPerEntry is large enough that a small payload was stored verbatim (not marker).
     expect(CACHE_MAX_BYTES_PER_ENTRY).toBeGreaterThan(1000);
+    expect(CACHE_MAX_CHARACTERS_PER_ENTRY).toBe(CACHE_MAX_BYTES_PER_ENTRY);
   });
 
   test("should set createdAt to the current timestamp within tolerance", () => {

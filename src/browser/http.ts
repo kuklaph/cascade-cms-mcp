@@ -8,10 +8,28 @@ export function browserBaseUrlFromApiUrl(apiUrl: string): string {
 
 export function normalizeBrowserRootUrl(input: string): string {
   const url = new URL(input);
-  url.search = "";
-  url.hash = "";
+  if (url.username || url.password) {
+    throw new Error("CASCADE_BROWSER_URL must not include credentials");
+  }
+  if (url.search) {
+    throw new Error("CASCADE_BROWSER_URL must not include a query");
+  }
+  if (url.hash) {
+    throw new Error("CASCADE_BROWSER_URL must not include a fragment");
+  }
   const path = url.pathname.replace(/\/+$/, "");
   return `${url.origin}${path}`;
+}
+
+export function resolveBrowserRootUrl(
+  apiUrl: string,
+  browserUrl?: string,
+): string {
+  const resolved = browserUrl
+    ? normalizeBrowserRootUrl(browserUrl)
+    : browserBaseUrlFromApiUrl(apiUrl);
+  assertTrustedBrowserRootUrl(resolved, apiUrl);
+  return resolved;
 }
 
 export async function assertBrowserResponseOk(
@@ -45,7 +63,7 @@ export function assertTrustedBrowserRootUrl(rootUrl: string, apiUrl: string): vo
   if (isRelatedHost(browserHost, apiHost)) return;
 
   throw new Error(
-    "CASCADE_BROWSER_URL host must match CASCADE_URL host or share its parent domain",
+    "CASCADE_BROWSER_URL host must match CASCADE_URL host, be its parent or subdomain, or be another cascadecms.com host",
   );
 }
 
@@ -138,33 +156,15 @@ function isRelatedHost(browserHost: string, apiHost: string): boolean {
   if (browserHost === apiHost) return true;
   if (browserHost.endsWith(`.${apiHost}`)) return true;
   if (apiHost.endsWith(`.${browserHost}`)) return true;
-  return registrableDomain(browserHost) === registrableDomain(apiHost);
+  return isCascadeCloudHost(browserHost) && isCascadeCloudHost(apiHost);
+}
+
+function isCascadeCloudHost(hostname: string): boolean {
+  return hostname === "cascadecms.com" || hostname.endsWith(".cascadecms.com");
 }
 
 function normalizeHostname(hostname: string): string {
   return hostname.toLowerCase().replace(/\.$/, "");
-}
-
-const MULTI_LABEL_PUBLIC_SUFFIXES = new Set([
-  "ac.uk",
-  "co.nz",
-  "co.uk",
-  "com.au",
-  "edu.au",
-  "gov.uk",
-  "net.au",
-  "org.uk",
-]);
-
-function registrableDomain(hostname: string): string | undefined {
-  const parts = hostname.split(".").filter(Boolean);
-  if (parts.length < 2) return undefined;
-
-  const lastTwo = parts.slice(-2).join(".");
-  if (MULTI_LABEL_PUBLIC_SUFFIXES.has(lastTwo) && parts.length >= 3) {
-    return parts.slice(-3).join(".");
-  }
-  return lastTwo;
 }
 
 async function safeReadText(res: BrowserResponse): Promise<string> {

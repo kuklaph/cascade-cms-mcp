@@ -2,6 +2,7 @@ import { describe, expect, mock, test } from "bun:test";
 import {
   browserBaseUrlFromApiUrl,
   createBrowserSession,
+  resolveBrowserRootUrl,
 } from "../../src/browserApi.js";
 import { BROWSER_REQUEST_THROTTLE_MS } from "../../src/browser/throttle.js";
 
@@ -137,6 +138,46 @@ describe("browserBaseUrlFromApiUrl", () => {
   });
 });
 
+describe("resolveBrowserRootUrl", () => {
+  const apiUrl = "https://cms.example.edu/api/v1/";
+
+  test("normalizes trusted browser roots", () => {
+    expect(resolveBrowserRootUrl(apiUrl, "https://cms.example.edu/cascade///")).toBe(
+      "https://cms.example.edu/cascade",
+    );
+  });
+
+  test("allows sibling Cascade Cloud browser hosts", () => {
+    expect(
+      resolveBrowserRootUrl(
+        "https://tenant.cascadecms.com/api/v1/",
+        "https://tenant-admin.cascadecms.com",
+      ),
+    ).toBe("https://tenant-admin.cascadecms.com");
+  });
+
+  test.each([
+    ["http://cms.example.edu", "must use HTTPS"],
+    ["https://cms.example.edu.evil.example", "must match CASCADE_URL host"],
+    ["https://auth.example.edu", "must match CASCADE_URL host"],
+    ["https://evil.co.jp", "must match CASCADE_URL host"],
+    ["https://editor:secret@cms.example.edu", "must not include credentials"],
+    ["https://cms.example.edu?token=secret", "must not include a query"],
+    ["https://cms.example.edu#section", "must not include a fragment"],
+  ])("rejects unsafe browser root %s", (browserUrl, message) => {
+    expect(() => resolveBrowserRootUrl(apiUrl, browserUrl)).toThrow(message);
+  });
+
+  test("rejects sibling hosts under multi-label public suffixes", () => {
+    expect(() =>
+      resolveBrowserRootUrl(
+        "https://cms.example.co.jp/api/v1/",
+        "https://evil.co.jp",
+      ),
+    ).toThrow("must match CASCADE_URL host");
+  });
+});
+
 describe("createBrowserSession", () => {
   test("preserves pathful browser URL overrides", async () => {
     const { calls, fetchImpl } = fetchQueue(loginResponses());
@@ -163,7 +204,7 @@ describe("createBrowserSession", () => {
     const session = createFastBrowserSession(
       {
         ...configured,
-        url: "https://cms.example.edu/api/v1/",
+        url: "https://example.edu/api/v1/",
         browserUrl: "https://auth.example.edu",
       },
       fetchImpl as any,
@@ -180,12 +221,12 @@ describe("createBrowserSession", () => {
 
   test("rejects unrelated browser URL host overrides before fetch", async () => {
     const { calls, fetchImpl } = fetchQueue([]);
-    const session = createFastBrowserSession(
-      { ...configured, browserUrl: "https://not-cascade.example.net" },
-      fetchImpl as any,
-    );
-
-    await expect(session.login({ siteId: "site" })).rejects.toThrow(
+    expect(() =>
+      createFastBrowserSession(
+        { ...configured, browserUrl: "https://not-cascade.example.net" },
+        fetchImpl as any,
+      ),
+    ).toThrow(
       "CASCADE_BROWSER_URL host must match CASCADE_URL host",
     );
     expect(calls).toHaveLength(0);
@@ -281,14 +322,14 @@ describe("createBrowserSession", () => {
     expect(bun.calls[1].options.headers).toMatchObject({ cookie: "JSESSIONID=bun" });
   });
 
-  test("rejects non-HTTPS browser URLs before fetch", async () => {
+  test("rejects non-HTTPS browser URLs before fetch", () => {
     const { calls, fetchImpl } = fetchQueue([]);
-    const session = createFastBrowserSession(
-      { ...configured, browserUrl: "http://example.cascadecms.com" },
-      fetchImpl as any,
-    );
-
-    await expect(session.login({ siteId: "site" })).rejects.toThrow(
+    expect(() =>
+      createFastBrowserSession(
+        { ...configured, browserUrl: "http://example.cascadecms.com" },
+        fetchImpl as any,
+      ),
+    ).toThrow(
       "Cascade browser URL must use HTTPS",
     );
     expect(calls).toHaveLength(0);

@@ -10,7 +10,10 @@
 import { StdioServerTransport } from "@modelcontextprotocol/server";
 import { loadConfig } from "./config.js";
 import { createCascadeClient } from "./client.js";
-import { createBrowserSession } from "./browserApi.js";
+import {
+  createBrowserSession,
+  resolveBrowserRootUrl,
+} from "./browserApi.js";
 import { redactSecrets } from "./errors.js";
 import { createServer } from "./server.js";
 import { SERVER_NAME } from "./constants.js";
@@ -39,6 +42,7 @@ async function main(): Promise<void> {
 
   const client = createCascadeClient(config);
   const browserSession = createBrowserSession(config);
+  const cascadeBrowserUrl = resolveBrowserRootUrl(config.url, config.browserUrl);
   if (config.browserUsername && config.browserPassword && config.browserSiteId) {
     try {
       await browserSession.login({});
@@ -58,6 +62,7 @@ async function main(): Promise<void> {
   }
   const server = createServer(client, {
     browserSession,
+    cascadeBrowserUrl,
   });
   const transport = new StdioServerTransport();
 

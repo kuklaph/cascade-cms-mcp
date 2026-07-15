@@ -7,7 +7,7 @@
  *
  * The handler returns the slice text under `slice_text` alongside metadata.
  * The remaining fields (`handle`,
- * `bytes_total`, `offset`, `bytes_returned`, `has_more`, `next_offset?`)
+ * `characters_total`, `offset`, `characters_returned`, `has_more`, `next_offset?`)
  * surface in `structuredContent` as machine-readable slice metadata.
  */
 
@@ -35,29 +35,30 @@ export function registerReadResponseTool(
       description: buildCascadeToolDescription(
         `Retrieve a slice of a cached MCP response by handle (read_response).
 
-When an MCP tool response exceeds the MCP character budget, the server caches the complete payload and returns a handle in structuredContent._cache.handle plus a preview in the text block. Use read_response to fetch the rest — either the remainder in chunks, or a targeted byte range if you know the structure.
+When an MCP tool response exceeds the MCP character budget, the server caches the complete payload and returns a handle in structuredContent._cache.handle plus a preview in the text block. Use read_response to fetch the rest — either the remainder in chunks, or a targeted character range if you know the structure. Character counts and offsets are JavaScript UTF-16 code units.
 
 Args:
   - handle (string, required): The handle returned by a prior tool call's structuredContent._cache.handle (e.g. "h_550e8400-...").
-  - offset (number, optional, default 0): Byte offset within the full rendered response. Use the originating call's bytes_returned as the next offset, or structuredContent._cache.next_offset when iterating.
+  - offset (number, optional, default 0): Character offset within the full rendered response. Use the originating call's characters_returned as the next offset, or structuredContent._cache.next_offset when iterating.
   - length (number, optional, default ${CHARACTER_LIMIT}): Max characters to return in this slice. Capped at ${CHARACTER_LIMIT}.
 
 Returns:
   {
     success: true,
     handle: "<original handle>",
-    bytes_total: <full response length>,
+    characters_total: <full response length>,
     offset: <requested offset>,
-    bytes_returned: <length of returned slice>,
+    characters_returned: <length of returned slice>,
     slice_text: "<requested response slice>",
     has_more: <bool>,
     next_offset: <offset to use next, if has_more>
   }
+  bytes_total and bytes_returned remain as deprecated aliases for characters_total and characters_returned.
   The same JSON object is returned in content[0].text and structuredContent; slice_text contains the response slice.
 
 Examples:
   - Continue reading: { handle: "h_abc...", offset: 20000 }
-  - Specific byte range: { handle: "h_abc...", offset: 50000, length: 10000 }
+  - Specific character range: { handle: "h_abc...", offset: 50000, length: 10000 }
   - Don't use when: The originating response fit under the limit (no handle was minted).
   - Don't use when: The handle is older than ${OVERSIZE_RESPONSE_CACHE_MAX_ENTRIES} oversize responses back (LRU-evicted); re-run the originating tool.
 
@@ -85,10 +86,10 @@ Error Handling:
             `Handle ${handle} not found. The cache holds the last ${OVERSIZE_RESPONSE_CACHE_MAX_ENTRIES} oversize responses; this handle was either never minted, was already evicted, or expired. Re-run the originating tool to mint a new handle.`,
           );
         }
-        const bytes_total = entry.fullText.length;
+        const charactersTotal = entry.fullText.length;
         const safeOffset = Math.min(
           Math.max(0, Math.floor(offset)),
-          bytes_total,
+          charactersTotal,
         );
         const safeLength = Math.max(
           1,
@@ -107,8 +108,8 @@ function buildSliceResponse(
   offset: number,
   maxLength: number,
 ): Record<string, unknown> {
-  const bytes_total = fullText.length;
-  const remaining = Math.max(0, bytes_total - offset);
+  const charactersTotal = fullText.length;
+  const remaining = Math.max(0, charactersTotal - offset);
   let low = 0;
   let high = Math.min(maxLength, remaining);
   let best = sliceResponse(fullText, handle, offset, 0, maxLength);
@@ -134,18 +135,21 @@ function sliceResponse(
   sliceLength: number,
   requestedLength: number,
 ): Record<string, unknown> {
-  const bytes_total = fullText.length;
+  const charactersTotal = fullText.length;
   const slice = fullText.slice(offset, offset + sliceLength);
-  const bytes_returned = slice.length;
-  const nextOffset = offset + bytes_returned;
-  const has_more = nextOffset < bytes_total;
+  const charactersReturned = slice.length;
+  const nextOffset = offset + charactersReturned;
+  const has_more = nextOffset < charactersTotal;
 
   return {
     success: true,
     handle,
-    bytes_total,
+    characters_total: charactersTotal,
     offset,
-    bytes_returned,
+    characters_returned: charactersReturned,
+    // Deprecated compatibility aliases. These values are not byte counts.
+    bytes_total: charactersTotal,
+    bytes_returned: charactersReturned,
     has_more,
     ...(has_more ? { next_offset: nextOffset } : {}),
     slice_text: slice,

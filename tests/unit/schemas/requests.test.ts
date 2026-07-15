@@ -1164,6 +1164,68 @@ describe("asset follow-up request schemas", () => {
     expect(res.success).toBe(true);
   });
 
+  test("read-only asset pointer inputs reject unsafe object-key segments", () => {
+    const cases = [
+      [AssetListFactsRequestSchema, { pointer_prefix: "/asset/__proto__" }],
+      [
+        AssetSearchValuesRequestSchema,
+        { value_contains: "x", pointer_prefix: "/asset/prototype" },
+      ],
+      [AssetSearchKeysRequestSchema, { pointer_prefix: "/asset/constructor" }],
+      [AssetGetValueRequestSchema, { pointer: "/asset/__proto__" }],
+      [
+        AssetListReferencesRequestSchema,
+        { pointer_prefix: "/asset/prototype" },
+      ],
+      [
+        AssetListScalarArtifactsRequestSchema,
+        { pointer_prefix: "/asset/constructor" },
+      ],
+      [AssetListNodeletsRequestSchema, { pointer: "/asset/__proto__" }],
+      [AssetGetNodeletRequestSchema, { pointer: "/asset/prototype" }],
+    ] as const;
+
+    for (const [schema, input] of cases) {
+      expect(schema.safeParse({ asset_handle: HANDLE, ...input }).success).toBe(
+        false,
+      );
+    }
+  });
+
+  test("read-only asset pointer inputs retain root and escaped JSON Pointer support", () => {
+    expect(
+      AssetGetValueRequestSchema.safeParse({
+        asset_handle: HANDLE,
+        pointer: "/asset/a~1b/m~0n",
+      }).success,
+    ).toBe(true);
+    expect(
+      AssetListNodeletsRequestSchema.safeParse({
+        asset_handle: HANDLE,
+        pointer: "",
+      }).success,
+    ).toBe(true);
+  });
+
+  test("read-only asset pointer fields document reserved object-key segments", () => {
+    const descriptions = [
+      AssetListFactsRequestSchema.shape.pointer_prefix.description,
+      AssetSearchValuesRequestSchema.shape.pointer_prefix.description,
+      AssetSearchKeysRequestSchema.shape.pointer_prefix.description,
+      AssetGetValueRequestSchema.shape.pointer.description,
+      AssetListReferencesRequestSchema.shape.pointer_prefix.description,
+      AssetListScalarArtifactsRequestSchema.shape.pointer_prefix.description,
+      AssetListNodeletsRequestSchema.shape.pointer.description,
+      AssetGetNodeletRequestSchema.shape.pointer.description,
+    ];
+
+    for (const description of descriptions) {
+      expect(description).toContain("__proto__");
+      expect(description).toContain("prototype");
+      expect(description).toContain("constructor");
+    }
+  });
+
   test("semantic asset schemas accept selectors and assertions", () => {
     expect(
       AssetResolveNodesRequestSchema.safeParse({
@@ -1328,7 +1390,22 @@ describe("draft workflow request schemas", () => {
     ).toBe(false);
   });
 
-  test("draft value and submit schemas use draft_handle and snake_case revision fields", () => {
+  test("draft value and submit schemas use draft_handle and approval-visible target fields", () => {
+    expect(Object.keys(DraftSubmitRequestSchema.shape)).toEqual([
+      "cascade_url",
+      "asset_title",
+      "asset_display_name",
+      "asset_path",
+      "asset_parent_id",
+      "asset_parent_path",
+      "asset_type",
+      "asset_name",
+      "asset_site_name",
+      "asset_site_id",
+      "draft_handle",
+      "expected_revision",
+      "discard_on_success",
+    ]);
     expect(
       DraftGetValueRequestSchema.safeParse({
         draft_handle: DRAFT_HANDLE,
@@ -1341,12 +1418,40 @@ describe("draft workflow request schemas", () => {
       DraftSubmitRequestSchema.safeParse({
         draft_handle: DRAFT_HANDLE,
         expected_revision: 2,
+        cascade_url:
+          "https://example.cascadecms.com/entity/open.act?id=page-001&type=page",
+        asset_title: "Example title",
+        asset_display_name: "Example display name",
+        asset_path: "/example",
+        asset_parent_id: null,
+        asset_parent_path: "/",
+        asset_type: "page",
+        asset_name: "example",
+        asset_site_name: "my-site",
+        asset_site_id: null,
         discard_on_success: true,
       }).success,
     ).toBe(true);
     expect(
       DraftSubmitRequestSchema.safeParse({
         draft_handle: DRAFT_HANDLE,
+        expected_revision: 2,
+        cascade_url: null,
+        asset_title: null,
+        asset_display_name: null,
+        asset_path: null,
+        asset_parent_id: null,
+        asset_parent_path: null,
+        asset_type: "user",
+        asset_name: "jdoe",
+        asset_site_name: null,
+        asset_site_id: null,
+      }).success,
+    ).toBe(true);
+    expect(
+      DraftSubmitRequestSchema.safeParse({
+        draft_handle: DRAFT_HANDLE,
+        expected_revision: 2,
       }).success,
     ).toBe(false);
   });

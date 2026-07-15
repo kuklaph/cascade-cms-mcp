@@ -1,6 +1,7 @@
 export {
   browserBaseUrlFromApiUrl,
   createBrowserSession,
+  resolveBrowserRootUrl,
 } from "./browser/session.js";
 export type {
   BrowserCheckDraftResult,

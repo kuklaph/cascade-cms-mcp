@@ -4,6 +4,16 @@ All notable changes to `cascade-cms-mcp-server` will be documented here.
 
 ## Unreleased
 
+### Breaking Changes
+
+- `local_draft_submit` now requires approval context fields for the Cascade URL, title, display name, asset and parent placement, asset type, asset name, site name, and site ID. Copy the final values from `local_draft_validate` after any patch that could change them.
+- Read-only cached-asset JSON Pointer fields now reject the reserved object-key segments `__proto__`, `prototype`, and `constructor`.
+
+### Changed
+
+- Oversized response envelopes and `read_response` now expose `characters_total` and `characters_returned`; offsets and character counts use JavaScript UTF-16 code units. `bytes_total` and `bytes_returned` remain as deprecated compatibility aliases and are not byte counts.
+- `CASCADE_BROWSER_URL` is now normalized and validated before server tools use it. It must use HTTPS. Its host must match the `CASCADE_URL` host, have a parent/subdomain relationship, or share the `cascadecms.com` service domain. Credentials, queries, and fragments are rejected.
+
 ## 2.0.1 - 2026-06-30
 
 ### Changed

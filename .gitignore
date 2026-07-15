@@ -8,6 +8,9 @@ dist/
 .claude/
 .serena/
 
+# Local agent guidance
+AGENTS.md
+
 # Scratch / research artifacts (not part of the shipped code)
 tmp/
 

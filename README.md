@@ -67,7 +67,7 @@ Node/npm fallback:
 }
 ```
 
-Omit `CASCADE_BROWSER_URL` when the browser login host matches the origin derived from `CASCADE_URL`.
+Omit `CASCADE_BROWSER_URL` when the browser UI root matches the origin derived from `CASCADE_URL`.
 
 For UI-based clients, enter the same values:
 
@@ -151,7 +151,7 @@ Recommended browser setup:
 
 1. Set `CASCADE_BROWSER_USERNAME`, `CASCADE_BROWSER_PASSWORD`, and `CASCADE_BROWSER_SITE_ID` together before starting the MCP server.
 2. Use the [production site ID](#find-the-site-id) for `CASCADE_BROWSER_SITE_ID` unless you intentionally want browser tools scoped to another site.
-3. Set `CASCADE_BROWSER_URL` only when the browser login host differs from the origin derived from `CASCADE_URL`. The browser host must match `CASCADE_URL` or share its parent domain.
+3. Set `CASCADE_BROWSER_URL` only when the browser UI root differs from the origin derived from `CASCADE_URL`. It must use HTTPS. The hosts must match, have a parent/subdomain relationship, or both be under `cascadecms.com` (for example, `tenant.cascadecms.com` and `tenant-admin.cascadecms.com`). Credentials, queries, and fragments are rejected.
 
 The site ID is required because Cascade's browser UI keeps an active site context. Browser login calls `switchSite.act` after authentication to mirror selecting a site in Cascade's site picker.
 
@@ -191,7 +191,7 @@ Use this section to decide whether this MCP covers the job. Your MCP client or a
 | Authenticate to the Cascade browser UI and cache a browser session                                      | Yes       |
 | Check the browser-only active editing draft notification for an asset                                   | Yes; requires browser API config or prior `browser_login`, plus `asset_id` and `asset_type` |
 | List, create, update, and delete browser-admin snippets                                                 | Yes; requires browser API config or prior `browser_login` |
-| Fetch additional bytes from large/truncated responses                                                   | Yes       |
+| Fetch additional characters from large/truncated responses                                              | Yes       |
 | Persist blocked-call rules that prevent matching MCP tool calls from running                            | Yes       |
 | Generate site and root-folder removal safeguards                                                        | Yes       |
 
@@ -205,7 +205,7 @@ These sections are mainly for agents and users configuring MCP approvals. They c
 
 Most tool responses put JSON text in `content[0]`. When present, `structuredContent` is the authoritative machine-readable result.
 
-Oversized responses return bounded `_cache` metadata. Use `read_response` with that handle to page through the full serialized response. Handles are process-scoped and may be evicted after later calls.
+Oversized responses return bounded `_cache` metadata. Use `read_response` with that handle to page through the full serialized response. `characters_total`, `characters_returned`, and offsets use JavaScript UTF-16 code units. `bytes_total` and `bytes_returned` remain as deprecated compatibility aliases and are not byte counts. Handles are process-scoped and may be evicted after later calls.
 
 `read` returns a compact preview plus an `asset_handle` by default. Use `read_mode: "raw"` only when you need the full Cascade payload immediately. Follow-up tools inspect cached data and do not call Cascade again.
 
@@ -262,6 +262,8 @@ These tools do not call Cascade directly. They inspect in-memory handles created
 
 Structured-data selectors support `expected_matches` to assert exact match counts.
 
+Read-only cached-asset JSON Pointer and pointer-prefix fields reject the reserved object-key segments `__proto__`, `prototype`, and `constructor`.
+
 File data tools:
 
 Use these for Cascade `file` assets whose binary content is stored in `file.data`. Each tool accepts an `asset_handle` from `read` or a direct file `identifier`. With an `asset_handle`, the tool uses the local cache. With an `identifier`, it reads the file from Cascade first and caches it.
@@ -282,7 +284,8 @@ Drafts are mutable, in-memory payloads for `create` or `edit`. Local draft tools
 - Edit drafts start from a cached `asset_handle`; create drafts start from an asset envelope or scaffold.
 - Patch tools mutate only the local draft addressed by `draft_handle`.
 - `local_draft_set_file_data` reads exactly one of `input_path` or `base64_data`, normalizes bytes to signed `file.data`, and keeps bytes outside draft JSON until submit.
-- `local_draft_submit` validates the final payload, checks tool-block rules, re-reads edit sources to reject stale drafts, and then calls Cascade.
+- `local_draft_open` and `local_draft_validate` return `cascade_url`, `asset_title`, `asset_display_name`, `asset_path`, `asset_parent_id`, `asset_parent_path`, `asset_type`, `asset_name`, `asset_site_name`, and `asset_site_id`. If a patch could change any approval field, run `local_draft_validate` afterward and pass its final values to `local_draft_submit`; otherwise the values from `local_draft_open` remain current. Unavailable values are `null`.
+- `local_draft_submit` verifies those approval fields, validates the final payload, checks tool-block rules, re-reads edit sources to reject stale drafts, and then calls Cascade.
 
 Local draft inspection tools:
 
@@ -423,6 +426,16 @@ Edit from a cached read without reconstructing the full payload in chat:
 {
   "tool": "local_draft_submit",
   "arguments": {
+    "cascade_url": "https://example.cascadecms.com/entity/open.act?id=page-001&type=page",
+    "asset_title": "Example page",
+    "asset_display_name": "Example Page",
+    "asset_path": "/example",
+    "asset_parent_id": null,
+    "asset_parent_path": "/",
+    "asset_type": "page",
+    "asset_name": "example",
+    "asset_site_name": "my-site",
+    "asset_site_id": null,
     "draft_handle": "d_550e8400-e29b-41d4-a716-446655440001",
     "expected_revision": 2,
     "discard_on_success": true

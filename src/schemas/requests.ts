@@ -374,6 +374,9 @@ const SafeJsonPointerSchema = JsonPointerSchema.refine(
   "JSON Pointer must not contain __proto__, prototype, or constructor segments",
 );
 
+const SafeJsonPointerRestrictionDescription =
+  "Reserved object-key segments __proto__, prototype, and constructor are rejected.";
+
 const SafeObjectFieldSchema = z
   .string()
   .min(1, "field must not be empty")
@@ -471,7 +474,9 @@ const ScalarArtifactKindDescription =
 export const AssetListFactsRequestSchema = z
   .object({
     ...AssetHandleField,
-    pointer_prefix: z.string().optional(),
+    pointer_prefix: SafeJsonPointerSchema.optional().describe(
+      `Optional JSON Pointer prefix. ${SafeJsonPointerRestrictionDescription}`,
+    ),
     fact_kind: z.enum(["object", "array", "key", "scalar"]).optional(),
     key: z.string().optional(),
     key_contains: z.string().optional(),
@@ -489,7 +494,9 @@ export const AssetSearchValuesRequestSchema = z
   .object({
     ...AssetHandleField,
     value_contains: z.string().min(1, "value_contains must not be empty"),
-    pointer_prefix: z.string().optional(),
+    pointer_prefix: SafeJsonPointerSchema.optional().describe(
+      `Optional JSON Pointer prefix. ${SafeJsonPointerRestrictionDescription}`,
+    ),
     key: z.string().optional(),
     key_contains: z.string().optional(),
     scalar_type: z.enum(["string", "number", "boolean", "null"]).optional(),
@@ -505,7 +512,9 @@ export const AssetSearchKeysRequestSchema = z
     ...AssetHandleField,
     key: z.string().optional(),
     key_contains: z.string().optional(),
-    pointer_prefix: z.string().optional(),
+    pointer_prefix: SafeJsonPointerSchema.optional().describe(
+      `Optional JSON Pointer prefix. ${SafeJsonPointerRestrictionDescription}`,
+    ),
     ...AuditPaginationFields,
   })
   .strict();
@@ -515,7 +524,9 @@ export type AssetSearchKeysInput = z.infer<typeof AssetSearchKeysRequestSchema>;
 export const AssetGetValueRequestSchema = z
   .object({
     ...AssetHandleField,
-    pointer: z.string().describe("JSON Pointer into the exact cached raw JSON."),
+    pointer: SafeJsonPointerSchema.describe(
+      `JSON Pointer into the exact cached raw JSON. ${SafeJsonPointerRestrictionDescription}`,
+    ),
     offset: z.number().int().min(0).optional(),
     length: z.number().int().min(1).max(CHARACTER_LIMIT).optional(),
   })
@@ -594,7 +605,9 @@ export type FileDataExportInput = z.infer<typeof FileDataExportRequestSchema>;
 export const AssetListReferencesRequestSchema = z
   .object({
     ...AssetHandleField,
-    pointer_prefix: z.string().optional(),
+    pointer_prefix: SafeJsonPointerSchema.optional().describe(
+      `Optional JSON Pointer prefix. ${SafeJsonPointerRestrictionDescription}`,
+    ),
     reference_kind: z.string().optional(),
     value_contains: z.string().optional(),
     ...AuditPaginationFields,
@@ -619,7 +632,9 @@ export const AssetListScalarArtifactsRequestSchema = z
       ])
       .optional()
       .describe(ScalarArtifactKindDescription),
-    pointer_prefix: z.string().optional(),
+    pointer_prefix: SafeJsonPointerSchema.optional().describe(
+      `Optional JSON Pointer prefix. ${SafeJsonPointerRestrictionDescription}`,
+    ),
     key: z.string().optional(),
     key_contains: z.string().optional(),
     value_contains: z.string().optional(),
@@ -634,11 +649,9 @@ export type AssetListScalarArtifactsInput = z.infer<
 export const AssetListNodeletsRequestSchema = z
   .object({
     ...AssetHandleField,
-    pointer: z
-      .string()
-      .describe(
-        "JSON Pointer of the parent nodelet. Use an empty string to list root nodelets.",
-      ),
+    pointer: SafeJsonPointerSchema.describe(
+      `JSON Pointer of the parent nodelet. Use an empty string to list root nodelets. ${SafeJsonPointerRestrictionDescription}`,
+    ),
     cursor: z
       .string()
       .regex(/^c_[0-9]+$/, "cursor must be a next_cursor returned by this tool")
@@ -652,8 +665,8 @@ export type AssetListNodeletsInput = z.infer<typeof AssetListNodeletsRequestSche
 export const AssetGetNodeletRequestSchema = z
   .object({
     ...AssetHandleField,
-    pointer: z.string().describe(
-      "JSON Pointer returned by read preview root_outline or asset_list_nodelets.",
+    pointer: SafeJsonPointerSchema.describe(
+      `JSON Pointer returned by read preview root_outline or asset_list_nodelets. ${SafeJsonPointerRestrictionDescription}`,
     ),
     depth: z
       .number()
@@ -1114,6 +1127,66 @@ export type DraftValidateInput = z.infer<typeof DraftValidateRequestSchema>;
 
 export const DraftSubmitRequestSchema = z
   .object({
+    cascade_url: z
+      .url()
+      .nullable()
+      .describe(
+        "REQUIRED: Copy cascade_url from local_draft_open or local_draft_validate so the approval prompt identifies the exact Cascade asset. Use null only when those tools return null because the draft has no existing asset URL.",
+      ),
+    asset_title: z
+      .string()
+      .nullable()
+      .describe(
+        "REQUIRED: Copy asset_title from local_draft_open or local_draft_validate so the approval prompt identifies the current draft title. Use null only when those tools return null.",
+      ),
+    asset_display_name: z
+      .string()
+      .nullable()
+      .describe(
+        "REQUIRED: Copy asset_display_name from local_draft_open or local_draft_validate so the approval prompt identifies the current draft display name. Use null only when those tools return null.",
+      ),
+    asset_path: z
+      .string()
+      .nullable()
+      .describe(
+        "REQUIRED: Copy asset_path from local_draft_open or local_draft_validate so the approval prompt identifies the current draft path. Use null only when those tools return null.",
+      ),
+    asset_parent_id: z
+      .string()
+      .nullable()
+      .describe(
+        "REQUIRED: Copy asset_parent_id from local_draft_open or local_draft_validate so the approval prompt identifies ID-based parent placement. Use null only when those tools return null.",
+      ),
+    asset_parent_path: z
+      .string()
+      .nullable()
+      .describe(
+        "REQUIRED: Copy asset_parent_path from local_draft_open or local_draft_validate so the approval prompt identifies path-based parent placement. Use null only when those tools return null.",
+      ),
+    asset_type: z
+      .string()
+      .min(1)
+      .describe(
+        "REQUIRED: Copy asset_type from local_draft_open or local_draft_validate so the approval prompt identifies the kind of Cascade asset.",
+      ),
+    asset_name: z
+      .string()
+      .nullable()
+      .describe(
+        "REQUIRED: Copy asset_name from local_draft_open or local_draft_validate so the approval prompt identifies the asset name, username, or group name. Use null only when those tools return null.",
+      ),
+    asset_site_name: z
+      .string()
+      .nullable()
+      .describe(
+        "REQUIRED: Copy asset_site_name from local_draft_open or local_draft_validate so the approval prompt identifies the owning site by name. Use null only when those tools return null.",
+      ),
+    asset_site_id: z
+      .string()
+      .nullable()
+      .describe(
+        "REQUIRED: Copy asset_site_id from local_draft_open or local_draft_validate so the approval prompt identifies the owning site by ID. Use null only when those tools return null.",
+      ),
     ...DraftHandleField,
     expected_revision: DraftRevisionSchema,
     discard_on_success: z
@@ -1851,7 +1924,8 @@ export type EditPreferenceInput = z.infer<typeof EditPreferenceRequestSchema>;
  * 33. ReadResponseRequest — retrieve a slice of a cached oversize response.
  *
  * This is the only MCP-native tool (no Cascade backend). Agents call it with
- * a handle produced by an oversize tool response to fetch additional bytes.
+ * a handle produced by an oversize tool response to fetch additional
+ * characters.
  * ------------------------------------------------------------------------ */
 export const ReadResponseRequestSchema = z
   .object({
@@ -1875,7 +1949,7 @@ export const ReadResponseRequestSchema = z
       .min(0)
       .default(0)
       .describe(
-        "Byte offset to start the slice. Default 0. Use the previous call's next_offset to continue iterating.",
+        "Character offset, measured in UTF-16 code units, at which to start the slice. Default 0. Use the previous call's next_offset to continue iterating.",
       ),
     length: z
       .number()

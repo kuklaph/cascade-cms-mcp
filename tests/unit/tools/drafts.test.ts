@@ -46,6 +46,22 @@ function firstText(r: CallToolResult): string {
   return block.text;
 }
 
+function approvalFieldsFrom(r: CallToolResult) {
+  const body = r.structuredContent as Record<string, any>;
+  return {
+    cascade_url: body.cascade_url,
+    asset_title: body.asset_title,
+    asset_display_name: body.asset_display_name,
+    asset_path: body.asset_path,
+    asset_parent_id: body.asset_parent_id,
+    asset_parent_path: body.asset_parent_path,
+    asset_type: body.asset_type,
+    asset_name: body.asset_name,
+    asset_site_name: body.asset_site_name,
+    asset_site_id: body.asset_site_id,
+  };
+}
+
 function makeStore(initial: unknown[] = []): ToolBlockStore {
   return {
     path: "C:\\tmp\\tool-blocks.json",
@@ -62,6 +78,19 @@ const CREATE_ASSET = {
     contentTypePath: "/content-types/default",
     xhtml: "<p>New</p>",
   },
+};
+
+const CREATE_ASSET_APPROVAL_FIELDS = {
+  cascade_url: null,
+  asset_title: null,
+  asset_display_name: null,
+  asset_path: "/new-page",
+  asset_parent_id: null,
+  asset_parent_path: "/",
+  asset_type: "page",
+  asset_name: "new-page",
+  asset_site_name: "my-site",
+  asset_site_id: null,
 };
 
 const SECRET_USER_ASSET = {
@@ -330,6 +359,7 @@ describe("draft tools", () => {
     const open = findTool(tools, "local_draft_open");
     const patch = findTool(tools, "local_draft_apply_patch");
     const getValue = findTool(tools, "local_draft_get_value");
+    const validate = findTool(tools, "local_draft_validate");
     const submit = findTool(tools, "local_draft_submit");
 
     const opened = await open.handler({
@@ -367,9 +397,14 @@ describe("draft tools", () => {
     expect((readValue.structuredContent as Record<string, any>).value).toBe("draft-name");
     expect((readEntry.raw as any).asset.page.name).toBe("index");
 
+    const validated = await validate.handler({
+      draft_handle: openedBody.draft_handle,
+    });
+
     const submitted = await submit.handler({
       draft_handle: openedBody.draft_handle,
       expected_revision: 3,
+      ...approvalFieldsFrom(validated),
     });
 
     expect(submitted.isError).not.toBe(true);
@@ -414,6 +449,7 @@ describe("draft tools", () => {
     const submitted = await findTool(tools, "local_draft_submit").handler({
       draft_handle: draftHandle,
       expected_revision: 1,
+      ...approvalFieldsFrom(opened),
     });
 
     expect(submitted.isError).toBe(true);
@@ -454,6 +490,7 @@ describe("draft tools", () => {
     const submitted = await findTool(tools, "local_draft_submit").handler({
       draft_handle: draftHandle,
       expected_revision: 2,
+      ...approvalFieldsFrom(opened),
     });
 
     expect(submitted.isError).toBe(true);
@@ -504,6 +541,207 @@ describe("draft tools", () => {
     const draft = draftCache.get(draftHandle)!;
     expect(draft.revision).toBe(1);
     expect(draft.root).toMatchObject({ asset: CREATE_ASSET });
+  });
+
+  test("exposes and verifies edit draft approval context", async () => {
+    const { server, tools } = makeMockServer();
+    const assetCache = createAssetCache();
+    const approvalReadPage = {
+      ...EDIT_READ_PAGE,
+      asset: {
+        page: {
+          ...EDIT_READ_PAGE.asset.page,
+          path: "/academics/example",
+          metadata: {
+            title: "Example program",
+            displayName: "Example Program, B.A.",
+          },
+        },
+      },
+    };
+    const readEntry = assetCache.put(approvalReadPage);
+    const client = createMockClient({
+      read: mock(async () => approvalReadPage),
+      edit: mock(async () => OK_RESULT),
+    });
+
+    registerDraftTools(server as any, client, {
+      cache: createResponseCache(),
+      assetCache,
+      draftCache: createDraftCache(),
+      cascadeBrowserUrl: "https://example.cascadecms.com",
+    });
+
+    const opened = await findTool(tools, "local_draft_open").handler({
+      operation: "edit",
+      asset_handle: readEntry.handle,
+      expected_raw_hash: readEntry.rawHash,
+    });
+    const openedBody = opened.structuredContent as Record<string, any>;
+    const cascadeUrl =
+      "https://example.cascadecms.com/entity/open.act?id=page-001&type=page";
+
+    expect(openedBody.cascade_url).toBe(cascadeUrl);
+    expect(openedBody).toMatchObject({
+      asset_title: "Example program",
+      asset_display_name: "Example Program, B.A.",
+      asset_path: "/academics/example",
+      asset_parent_id: null,
+      asset_parent_path: "/",
+      asset_type: "page",
+      asset_name: "index",
+      asset_site_name: "my-site",
+      asset_site_id: null,
+    });
+    const submitInput = openedBody.next_actions.find(
+      (action: Record<string, unknown>) => action.tool === "local_draft_submit",
+    ).input;
+    expect(Object.keys(submitInput)).toEqual([
+      "cascade_url",
+      "asset_title",
+      "asset_display_name",
+      "asset_path",
+      "asset_parent_id",
+      "asset_parent_path",
+      "asset_type",
+      "asset_name",
+      "asset_site_name",
+      "asset_site_id",
+      "draft_handle",
+      "expected_revision",
+    ]);
+    expect(submitInput).toMatchObject({
+      cascade_url: cascadeUrl,
+      asset_title: "Example program",
+      asset_display_name: "Example Program, B.A.",
+      asset_path: "/academics/example",
+      asset_parent_id: null,
+      asset_parent_path: "/",
+      asset_type: "page",
+      asset_name: "index",
+      asset_site_name: "my-site",
+      asset_site_id: null,
+    });
+
+    const validated = await findTool(tools, "local_draft_validate").handler({
+      draft_handle: openedBody.draft_handle,
+    });
+    expect(validated.structuredContent as Record<string, any>).toMatchObject({
+      cascade_url: cascadeUrl,
+      asset_title: "Example program",
+      asset_display_name: "Example Program, B.A.",
+      asset_path: "/academics/example",
+      asset_parent_id: null,
+      asset_parent_path: "/",
+      asset_type: "page",
+      asset_name: "index",
+      asset_site_name: "my-site",
+      asset_site_id: null,
+    });
+
+    const rejected = await findTool(tools, "local_draft_submit").handler({
+      draft_handle: openedBody.draft_handle,
+      expected_revision: 1,
+      cascade_url: cascadeUrl,
+      asset_title: "Example program",
+      asset_display_name: "Example Program, B.A.",
+      asset_path: "/academics/wrong",
+      asset_parent_id: null,
+      asset_parent_path: "/",
+      asset_type: "page",
+      asset_name: "index",
+      asset_site_name: "my-site",
+      asset_site_id: null,
+    });
+
+    expect(rejected.isError).toBe(true);
+    expect(firstText(rejected)).toContain("asset_path does not match");
+    expect(client.edit).not.toHaveBeenCalled();
+  });
+
+  test("identifies create drafts without paths in approval context", async () => {
+    const { server, tools } = makeMockServer();
+    registerDraftTools(server as any, createMockClient(), {
+      cache: createResponseCache(),
+      assetCache: createAssetCache(),
+      draftCache: createDraftCache(),
+    });
+
+    const opened = await findTool(tools, "local_draft_open").handler({
+      operation: "create",
+      asset: {
+        user: {
+          username: "jdoe",
+          fullName: "Jane Doe",
+          email: "jane@example.com",
+          authType: "normal",
+          password: "secret",
+          groups: "Editors",
+          roles: "Contributor",
+        },
+      },
+    });
+    const body = opened.structuredContent as Record<string, any>;
+
+    expect(body).toMatchObject({
+      cascade_url: null,
+      asset_title: null,
+      asset_display_name: null,
+      asset_path: null,
+      asset_parent_id: null,
+      asset_parent_path: null,
+      asset_type: "user",
+      asset_name: "jdoe",
+      asset_site_name: null,
+      asset_site_id: null,
+    });
+    expect(
+      body.next_actions.find(
+        (action: Record<string, unknown>) => action.tool === "local_draft_submit",
+      ).input,
+    ).toMatchObject({
+      asset_type: "user",
+      asset_name: "jdoe",
+    });
+  });
+
+  test("identifies ID-based create placement in approval context", async () => {
+    const { server, tools } = makeMockServer();
+    registerDraftTools(server as any, createMockClient(), {
+      cache: createResponseCache(),
+      assetCache: createAssetCache(),
+      draftCache: createDraftCache(),
+    });
+
+    const opened = await findTool(tools, "local_draft_open").handler({
+      operation: "create",
+      asset: {
+        page: {
+          name: "new-page",
+          parentFolderId: "folder-123",
+          siteId: "site-123",
+          contentTypeId: "content-type-123",
+          xhtml: "<p>New</p>",
+        },
+      },
+    });
+    const body = opened.structuredContent as Record<string, any>;
+
+    expect(body).toMatchObject({
+      asset_path: null,
+      asset_parent_id: "folder-123",
+      asset_parent_path: null,
+      asset_name: "new-page",
+      asset_site_id: "site-123",
+    });
+    expect(
+      body.next_actions.find(
+        (action: Record<string, unknown>) => action.tool === "local_draft_submit",
+      ).input,
+    ).toMatchObject({
+      asset_parent_id: "folder-123",
+      asset_parent_path: null,
+    });
   });
 
   test("final create and edit tool blocks reject local draft open before creating drafts", async () => {
@@ -838,6 +1076,7 @@ describe("draft tools", () => {
     const submitted = await findTool(tools, "local_draft_submit").handler({
       draft_handle: draftHandle,
       expected_revision: 2,
+      ...approvalFieldsFrom(validation),
     });
 
     expect(submitted.isError).not.toBe(true);
@@ -907,6 +1146,7 @@ describe("draft tools", () => {
     const submitted = await findTool(tools, "local_draft_submit").handler({
       draft_handle: draftHandle,
       expected_revision: 2,
+      ...approvalFieldsFrom(opened),
     });
 
     expect(submitted.isError).not.toBe(true);
@@ -1073,6 +1313,7 @@ describe("draft tools", () => {
     const submitted = await findTool(tools, "local_draft_submit").handler({
       draft_handle: draftHandle,
       expected_revision: 1,
+      ...approvalFieldsFrom(opened),
     });
 
     expect(submitted.isError).not.toBe(true);
@@ -1497,7 +1738,19 @@ describe("draft tools", () => {
         },
         {
           tool: "local_draft_submit",
-          input: { draft_ref: "draft" },
+          input: {
+            draft_ref: "draft",
+            cascade_url: null,
+            asset_title: null,
+            asset_display_name: null,
+            asset_path: "/cards",
+            asset_parent_id: null,
+            asset_parent_path: "/components",
+            asset_type: "xhtmlDataDefinitionBlock",
+            asset_name: "cards",
+            asset_site_name: "my-site",
+            asset_site_id: null,
+          },
         },
         {
           tool: "local_draft_validate",
@@ -1532,7 +1785,11 @@ describe("draft tools", () => {
         },
         {
           tool: "local_draft_submit",
-          input: { draft_ref: "draft", discard_on_success: true },
+          input: {
+            draft_ref: "draft",
+            ...CREATE_ASSET_APPROVAL_FIELDS,
+            discard_on_success: true,
+          },
         },
       ],
     });
@@ -1577,6 +1834,7 @@ describe("draft tools", () => {
           input: {
             draft_handle: draftHandle,
             expected_revision: 1,
+            ...approvalFieldsFrom(opened),
             discard_on_success: true,
           },
           save_as: "draft",
@@ -1613,6 +1871,7 @@ describe("draft tools", () => {
     const submitted = await findTool(tools, "local_draft_submit").handler({
       draft_handle: draftHandle,
       expected_revision: 1,
+      ...approvalFieldsFrom(opened),
     });
 
     expect(submitted.isError).toBe(true);
@@ -1659,6 +1918,7 @@ describe("draft tools", () => {
     const submitted = await findTool(tools, "local_draft_submit").handler({
       draft_handle: draftHandle,
       expected_revision: 1,
+      ...approvalFieldsFrom(opened),
     });
 
     expect(submitted.isError).toBe(true);
@@ -1693,6 +1953,7 @@ describe("draft tools", () => {
     const result = await findTool(tools, "local_draft_submit").handler({
       draft_handle: (opened.structuredContent as Record<string, any>).draft_handle,
       expected_revision: 1,
+      ...approvalFieldsFrom(opened),
     });
 
     expect(result.isError).toBe(true);
@@ -1717,6 +1978,7 @@ describe("draft tools", () => {
     const draftSubmitBlocked = await findTool(tools, "local_draft_submit").handler({
       draft_handle: (openedForDraftSubmitBlock.structuredContent as Record<string, any>).draft_handle,
       expected_revision: 1,
+      ...approvalFieldsFrom(openedForDraftSubmitBlock),
     });
 
     expect(draftSubmitBlocked.isError).toBe(true);
@@ -1745,6 +2007,7 @@ describe("draft tools", () => {
     const submitted = await findTool(tools, "local_draft_submit").handler({
       draft_handle: draftHandle,
       expected_revision: 1,
+      ...approvalFieldsFrom(opened),
       discard_on_success: true,
     });
 
@@ -1791,6 +2054,7 @@ describe("draft tools", () => {
     const submitted = await findTool(tools, "local_draft_submit").handler({
       draft_handle: draftHandle,
       expected_revision: 1,
+      ...approvalFieldsFrom(opened),
       discard_on_success: true,
     });
 
@@ -1842,11 +2106,13 @@ describe("draft tools", () => {
     const first = findTool(tools, "local_draft_submit").handler({
       draft_handle: draftHandle,
       expected_revision: 1,
+      ...approvalFieldsFrom(opened),
     });
     await createStarted;
     const second = await findTool(tools, "local_draft_submit").handler({
       draft_handle: draftHandle,
       expected_revision: 1,
+      ...approvalFieldsFrom(opened),
     });
 
     expect(second.isError).toBe(true);

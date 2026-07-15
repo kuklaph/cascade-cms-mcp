@@ -505,6 +505,7 @@ describe("createServer (server factory)", () => {
     expect(typeof envelope.handle).toBe("string");
     expect(envelope.handle.length).toBeGreaterThan(0);
     expect(envelope.bytes_total).toBeGreaterThan(CHARACTER_LIMIT);
+    expect(envelope.characters_total).toBe(envelope.bytes_total);
     expect(structured.success).toBe(true);
     expect(structured.truncated).toBe(true);
     expect(structured.asset).toBeUndefined();
@@ -524,6 +525,7 @@ describe("createServer (server factory)", () => {
       any
     >;
     expect(firstSliceStructured.bytes_returned).toBe(100);
+    expect(firstSliceStructured.characters_returned).toBe(100);
     expect(firstSliceStructured.has_more).toBe(true);
     expect(firstSliceStructured.offset).toBe(0);
     expect(firstSliceStructured.next_offset).toBe(100);
@@ -777,8 +779,25 @@ describe("createServer (server factory)", () => {
     );
     expect(JSON.stringify(draftPatchSchema.properties.operations)).toContain("replace");
     expect(JSON.stringify(draftPatchSchema.properties.operations)).toContain("remove");
-    expect(draftSubmitSchema.required).toContain("expected_revision");
+    expect(draftSubmitSchema.required).toEqual(
+      expect.arrayContaining([
+        "expected_revision",
+        "cascade_url",
+        "asset_title",
+        "asset_display_name",
+        "asset_path",
+        "asset_parent_id",
+        "asset_parent_path",
+        "asset_type",
+        "asset_name",
+        "asset_site_name",
+        "asset_site_id",
+      ]),
+    );
     expect(draftSubmitSchema.properties.expected_revision.type).toBe("integer");
+    expect(JSON.stringify(draftSubmitSchema.properties.cascade_url)).toContain(
+      "null",
+    );
     expect(draftSubmitSchema.properties.discard_on_success.type).toBe("boolean");
 
     expect(
@@ -1106,13 +1125,20 @@ describe("createServer (server factory)", () => {
             page: {
               ...READ_PAGE_OK.asset.page,
               xhtml: "<p>Home</p>",
+              metadata: {
+                title: "Home page",
+                displayName: "Home",
+              },
             },
           },
         }),
       ),
       edit: mock(() => Promise.resolve({ success: true })),
     });
-    const server = createServer(client, { toolBlockStore: emptyToolBlockStore() });
+    const server = createServer(client, {
+      toolBlockStore: emptyToolBlockStore(),
+      cascadeBrowserUrl: "https://example.cascadecms.com",
+    });
     const transport = await connectTestTransport(server);
 
     const readResult = await callToolViaProtocol(transport, "read", {
@@ -1126,6 +1152,20 @@ describe("createServer (server factory)", () => {
       expected_raw_hash: readBody.raw_hash,
     });
     const draftHandle = (openResult.structuredContent as Record<string, any>).draft_handle;
+    const cascadeUrl =
+      "https://example.cascadecms.com/entity/open.act?id=page-001&type=page";
+    expect(openResult.structuredContent).toMatchObject({
+      cascade_url: cascadeUrl,
+      asset_title: "Home page",
+      asset_display_name: "Home",
+      asset_path: "/index",
+      asset_parent_id: null,
+      asset_parent_path: "/",
+      asset_type: "page",
+      asset_name: "index",
+      asset_site_name: "my-site",
+      asset_site_id: null,
+    });
 
     await callToolViaProtocol(transport, "local_draft_apply_patch", {
       draft_handle: draftHandle,
@@ -1135,7 +1175,32 @@ describe("createServer (server factory)", () => {
       ],
     });
 
+    const validateResult = await callToolViaProtocol(
+      transport,
+      "local_draft_validate",
+      { draft_handle: draftHandle },
+    );
+    const validated = validateResult.structuredContent as Record<string, any>;
+    expect(validated).toMatchObject({
+      asset_type: "page",
+      asset_name: "updated-index",
+      asset_parent_id: null,
+      asset_parent_path: "/",
+      asset_site_name: "my-site",
+      asset_site_id: null,
+    });
+
     const submitResult = await callToolViaProtocol(transport, "local_draft_submit", {
+      cascade_url: validated.cascade_url,
+      asset_title: validated.asset_title,
+      asset_display_name: validated.asset_display_name,
+      asset_path: validated.asset_path,
+      asset_parent_id: validated.asset_parent_id,
+      asset_parent_path: validated.asset_parent_path,
+      asset_type: validated.asset_type,
+      asset_name: validated.asset_name,
+      asset_site_name: validated.asset_site_name,
+      asset_site_id: validated.asset_site_id,
       draft_handle: draftHandle,
       expected_revision: 2,
     });

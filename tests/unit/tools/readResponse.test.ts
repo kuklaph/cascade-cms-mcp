@@ -22,6 +22,8 @@ describe("registerReadResponseTool: registration", () => {
     expect(tool.config.annotations.destructiveHint).toBe(false);
     expect(tool.config.annotations.openWorldHint).toBe(false);
     expect(tool.config.description).toContain("read_response");
+    expect(tool.config.description).toContain("UTF-16 code units");
+    expect(tool.config.description).toContain("deprecated aliases");
   });
 });
 
@@ -43,11 +45,32 @@ describe("read_response handler", () => {
     expect(sc.slice_text).toBe(fullText.slice(0, 100));
     expect(sc.handle).toBe(handle);
     expect(sc.bytes_total).toBe(fullText.length);
+    expect(sc.characters_total).toBe(fullText.length);
     expect(sc.offset).toBe(0);
     expect(sc.bytes_returned).toBe(100);
+    expect(sc.characters_returned).toBe(100);
     expect(sc.has_more).toBe(true);
     expect(sc.next_offset).toBe(100);
     expect(Array.isArray(sc.next_actions)).toBe(true);
+  });
+
+  test("reports JavaScript string lengths rather than UTF-8 byte counts", async () => {
+    const { server, tools } = makeMockServer();
+    const cache = createResponseCache();
+    const fullText = "é😀";
+    const handle = cache.put("read", fullText);
+
+    registerReadResponseTool(server as any, { cache });
+
+    const tool = findTool(tools, "read_response");
+    const result = await tool.handler({ handle, offset: 0, length: 10 });
+    const sc = result.structuredContent as Record<string, unknown>;
+
+    expect(new TextEncoder().encode(fullText).length).toBe(6);
+    expect(sc.characters_total).toBe(3);
+    expect(sc.characters_returned).toBe(3);
+    expect(sc.bytes_total).toBe(sc.characters_total);
+    expect(sc.bytes_returned).toBe(sc.characters_returned);
   });
 
   test("supports later chunks and omits next_offset at end", async () => {

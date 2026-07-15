@@ -14,7 +14,13 @@ export const PREVIEW_LIMIT = 20_000;
 export const OVERSIZE_RESPONSE_CACHE_MAX_ENTRIES = 50;
 
 /** Max chars of rendered text stored per cache entry. Oversize entries are replaced with a marker. */
-export const CACHE_MAX_BYTES_PER_ENTRY = 2_000_000;
+export const CACHE_MAX_CHARACTERS_PER_ENTRY = 2_000_000;
+
+/**
+ * @deprecated Use CACHE_MAX_CHARACTERS_PER_ENTRY. This limit counts UTF-16
+ * code units, not bytes.
+ */
+export const CACHE_MAX_BYTES_PER_ENTRY = CACHE_MAX_CHARACTERS_PER_ENTRY;
 
 /** Max cached asset indexes retained for read follow-up tools. */
 export const ASSET_READ_CACHE_MAX_ENTRIES = 50;

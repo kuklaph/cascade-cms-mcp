@@ -82,10 +82,12 @@ describe("formatResponse", () => {
     expect((textPayload.preview as string).length).toBe(
       textPayload.bytes_returned as number,
     );
+    expect(textPayload.characters_returned).toBe(textPayload.bytes_returned);
     expect(firstText(out).length).toBeLessThanOrEqual(CHARACTER_LIMIT);
     expect(textPayload.handle).toEqual(envelope.handle);
     expect(textPayload.tool).toBe("read_response");
     expect(envelope.bytes_total).toBe(cache.get(envelope.handle as string)!.fullText.length);
+    expect(envelope.characters_total).toBe(envelope.bytes_total);
     expect(structured.success).toBe(true);
     expect(structured.truncated).toBe(true);
     expect(structured.matches).toBeUndefined();
@@ -101,6 +103,7 @@ describe("formatResponse", () => {
     expect(firstText(out).length).toBeLessThanOrEqual(CHARACTER_LIMIT);
     expect((textPayload.preview as string).length).toBeLessThan(PREVIEW_LIMIT);
     expect(textPayload.bytes_returned).toBe((textPayload.preview as string).length);
+    expect(textPayload.characters_returned).toBe(textPayload.bytes_returned);
   });
 
   test("returns JSON preview envelope without handle when oversize and cache is omitted", () => {
