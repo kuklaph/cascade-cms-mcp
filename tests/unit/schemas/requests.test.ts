@@ -1392,6 +1392,9 @@ describe("draft workflow request schemas", () => {
 
   test("draft value and submit schemas use draft_handle and approval-visible target fields", () => {
     expect(Object.keys(DraftSubmitRequestSchema.shape)).toEqual([
+      "approval_asset",
+      "approval_path",
+      "approval_url",
       "cascade_url",
       "asset_title",
       "asset_display_name",
@@ -1430,6 +1433,27 @@ describe("draft workflow request schemas", () => {
         asset_site_name: "my-site",
         asset_site_id: null,
         discard_on_success: true,
+      }).success,
+    ).toBe(true);
+    expect(
+      DraftSubmitRequestSchema.safeParse({
+        approval_asset: "Example display name",
+        approval_path: "/example",
+        approval_url:
+          "https://example.cascadecms.com/entity/open.act?id=page-001&type=page",
+        draft_handle: DRAFT_HANDLE,
+        expected_revision: 2,
+        cascade_url:
+          "https://example.cascadecms.com/entity/open.act?id=page-001&type=page",
+        asset_title: "Example title",
+        asset_display_name: "Example display name",
+        asset_path: "/example",
+        asset_parent_id: null,
+        asset_parent_path: "/",
+        asset_type: "page",
+        asset_name: "example",
+        asset_site_name: "my-site",
+        asset_site_id: null,
       }).success,
     ).toBe(true);
     expect(

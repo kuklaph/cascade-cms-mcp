@@ -794,6 +794,14 @@ describe("createServer (server factory)", () => {
         "asset_site_id",
       ]),
     );
+    expect(draftSubmitSchema.required).not.toContain("approval_asset");
+    expect(draftSubmitSchema.required).not.toContain("approval_path");
+    expect(draftSubmitSchema.required).not.toContain("approval_url");
+    for (const field of ["approval_asset", "approval_path", "approval_url"]) {
+      const propertySchema = JSON.stringify(draftSubmitSchema.properties[field]);
+      expect(propertySchema).toContain("string");
+      expect(propertySchema).toContain("null");
+    }
     expect(draftSubmitSchema.properties.expected_revision.type).toBe("integer");
     expect(JSON.stringify(draftSubmitSchema.properties.cascade_url)).toContain(
       "null",

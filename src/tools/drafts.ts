@@ -135,6 +135,12 @@ type DraftApprovalFields = {
   asset_site_id: string | null;
 };
 
+type DraftApprovalPreviewFields = {
+  approval_asset: string | null;
+  approval_path: string | null;
+  approval_url: string | null;
+};
+
 export function registerDraftTools(
   server: McpServer,
   client: CascadeClient,
@@ -175,6 +181,7 @@ export function registerDraftTools(
     return {
       success: true,
       ...draftSummary(draft),
+      ...draftApprovalPreviewFields(approvalFields),
       ...approvalFields,
       next_actions: draftNextActions(draft, approvalFields),
     };
@@ -200,6 +207,7 @@ export function registerDraftTools(
     return {
       success: true,
       ...draftSummary(draft),
+      ...draftApprovalPreviewFields(approvalFields),
       ...approvalFields,
       scaffold: scaffold.asset,
       required_value_pointers: scaffold.required_value_pointers,
@@ -247,6 +255,7 @@ export function registerDraftTools(
     return {
       success: true,
       ...draftSummary(draft),
+      ...draftApprovalPreviewFields(approvalFields),
       ...approvalFields,
       source_asset_handle: entry.handle,
       source_raw_hash: entry.rawHash,
@@ -371,12 +380,14 @@ export function registerDraftTools(
     draft_handle: string;
     expected_revision: number;
     discard_on_success?: boolean;
-  } & DraftApprovalFields): Promise<Record<string, unknown>> {
+  } & DraftApprovalFields & Partial<DraftApprovalPreviewFields>): Promise<Record<string, unknown>> {
     const draft = getDraftEntry(draftCache, args.draft_handle);
+    const approvalFields = draftApprovalFields(draft, resolved.cascadeBrowserUrl);
     assertDraftApprovalFieldsMatch(
       args,
-      draftApprovalFields(draft, resolved.cascadeBrowserUrl),
+      approvalFields,
     );
+    assertDraftApprovalPreviewFieldsMatch(args, approvalFields);
     if (args.expected_revision !== draft.revision) {
       throw new Error(
         `expected_revision ${args.expected_revision} does not match current draft revision ${draft.revision}.`,
@@ -1467,6 +1478,7 @@ function validateDraft(
       draft_handle: entry.handle,
       operation: entry.operation,
       revision: entry.revision,
+      ...draftApprovalPreviewFields(approvalFields),
       ...approvalFields,
       ...(entry.fileData
         ? {
@@ -1482,6 +1494,7 @@ function validateDraft(
     draft_handle: entry.handle,
     operation: entry.operation,
     revision: entry.revision,
+    ...draftApprovalPreviewFields(approvalFields),
     ...approvalFields,
     issues: parsed.issues,
   };
@@ -1496,7 +1509,8 @@ function draftCascadeUrl(
   }
   const root = browserUrl.replace(/\/+$/, "");
   const id = encodeURIComponent(entry.sourceIdentifier.id);
-  const type = encodeURIComponent(entry.sourceIdentifier.type);
+  const sourceType = entry.sourceIdentifier.type;
+  const type = encodeURIComponent(sourceType.startsWith("block_") ? "block" : sourceType);
   return `${root}/entity/open.act?id=${id}&type=${type}`;
 }
 
@@ -1523,6 +1537,20 @@ function draftApprovalFields(
   };
 }
 
+function draftApprovalPreviewFields(
+  approvalFields: DraftApprovalFields,
+): DraftApprovalPreviewFields {
+  return {
+    approval_asset: firstNonEmptyString(
+      approvalFields.asset_display_name,
+      approvalFields.asset_title,
+      approvalFields.asset_name,
+    ),
+    approval_path: approvalFields.asset_path,
+    approval_url: approvalFields.cascade_url,
+  };
+}
+
 function draftAssetPath(asset: Record<string, unknown> | undefined): string | null {
   if (!asset) return null;
   if (typeof asset.path === "string") return asset.path;
@@ -1541,6 +1569,13 @@ function draftAssetPath(asset: Record<string, unknown> | undefined): string | nu
 function firstString(...values: unknown[]): string | null {
   for (const value of values) {
     if (typeof value === "string") return value;
+  }
+  return null;
+}
+
+function firstNonEmptyString(...values: unknown[]): string | null {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim().length > 0) return value;
   }
   return null;
 }
@@ -1567,6 +1602,32 @@ function assertDraftApprovalFieldsMatch(
       `${field} does not match the current draft. Copy the approval fields from local_draft_open or local_draft_validate before submitting.`,
     );
   }
+}
+
+function assertDraftApprovalPreviewFieldsMatch(
+  actual: Partial<DraftApprovalPreviewFields>,
+  approvalFields: DraftApprovalFields,
+): void {
+  const expected = draftApprovalPreviewFields(approvalFields);
+  const fields = ["approval_asset", "approval_path", "approval_url"] as const;
+  for (const field of fields) {
+    if (actual[field] === undefined || actual[field] === expected[field]) continue;
+    throw new Error(
+      `${field} does not match the current draft. Copy the approval fields from local_draft_open or local_draft_validate before submitting.`,
+    );
+  }
+}
+
+function draftSubmitInput(
+  entry: DraftCacheEntry,
+  approvalFields: DraftApprovalFields,
+): Record<string, unknown> {
+  return {
+    ...draftApprovalPreviewFields(approvalFields),
+    ...approvalFields,
+    draft_handle: entry.handle,
+    expected_revision: entry.revision,
+  };
 }
 
 async function assertToolBlockAllowed(
@@ -1772,11 +1833,7 @@ function draftNextActions(
         "draft_handle",
         "expected_revision",
       ],
-      input: {
-        ...approvalFields,
-        draft_handle: entry.handle,
-        expected_revision: entry.revision,
-      },
+      input: draftSubmitInput(entry, approvalFields),
     },
   ];
 }
@@ -1819,11 +1876,7 @@ function createScaffoldNextActions(
         "draft_handle",
         "expected_revision",
       ],
-      input: {
-        ...approvalFields,
-        draft_handle: entry.handle,
-        expected_revision: entry.revision,
-      },
+      input: draftSubmitInput(entry, approvalFields),
     },
   ];
 }
@@ -1867,11 +1920,7 @@ function createScaffoldFromAssetNextActions(
         "draft_handle",
         "expected_revision",
       ],
-      input: {
-        ...approvalFields,
-        draft_handle: entry.handle,
-        expected_revision: entry.revision,
-      },
+      input: draftSubmitInput(entry, approvalFields),
     },
   ];
 }

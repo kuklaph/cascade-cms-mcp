@@ -284,8 +284,10 @@ Drafts are mutable, in-memory payloads for `create` or `edit`. Local draft tools
 - Edit drafts start from a cached `asset_handle`; create drafts start from an asset envelope or scaffold.
 - Patch tools mutate only the local draft addressed by `draft_handle`.
 - `local_draft_set_file_data` reads exactly one of `input_path` or `base64_data`, normalizes bytes to signed `file.data`, and keeps bytes outside draft JSON until submit.
-- `local_draft_open` and `local_draft_validate` return `cascade_url`, `asset_title`, `asset_display_name`, `asset_path`, `asset_parent_id`, `asset_parent_path`, `asset_type`, `asset_name`, `asset_site_name`, and `asset_site_id`. If a patch could change any approval field, run `local_draft_validate` afterward and pass its final values to `local_draft_submit`; otherwise the values from `local_draft_open` remain current. Unavailable values are `null`.
-- `local_draft_submit` verifies those approval fields, validates the final payload, checks tool-block rules, re-reads edit sources to reject stale drafts, and then calls Cascade.
+- `local_draft_open` and `local_draft_validate` return `cascade_url`, `asset_title`, `asset_display_name`, `asset_path`, `asset_parent_id`, `asset_parent_path`, `asset_type`, `asset_name`, `asset_site_name`, and `asset_site_id`. Unavailable values are `null`.
+- They also return `approval_asset`, `approval_path`, and `approval_url` for clients with compact approval previews. `approval_asset` uses the first nonempty display name, title, or asset name.
+- If a patch could change any approval field, run `local_draft_validate` afterward and pass its final values to `local_draft_submit`; otherwise the values from `local_draft_open` remain current.
+- `local_draft_submit` verifies the asset fields and any supplied preview aliases, validates the final payload, checks tool-block rules, re-reads edit sources to reject stale drafts, and then calls Cascade.
 
 Local draft inspection tools:
 
@@ -426,6 +428,9 @@ Edit from a cached read without reconstructing the full payload in chat:
 {
   "tool": "local_draft_submit",
   "arguments": {
+    "approval_asset": "Example Page",
+    "approval_path": "/example",
+    "approval_url": "https://example.cascadecms.com/entity/open.act?id=page-001&type=page",
     "cascade_url": "https://example.cascadecms.com/entity/open.act?id=page-001&type=page",
     "asset_title": "Example page",
     "asset_display_name": "Example Page",

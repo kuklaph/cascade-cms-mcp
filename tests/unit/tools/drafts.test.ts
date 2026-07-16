@@ -583,6 +583,9 @@ describe("draft tools", () => {
 
     expect(openedBody.cascade_url).toBe(cascadeUrl);
     expect(openedBody).toMatchObject({
+      approval_asset: "Example Program, B.A.",
+      approval_path: "/academics/example",
+      approval_url: cascadeUrl,
       asset_title: "Example program",
       asset_display_name: "Example Program, B.A.",
       asset_path: "/academics/example",
@@ -597,6 +600,9 @@ describe("draft tools", () => {
       (action: Record<string, unknown>) => action.tool === "local_draft_submit",
     ).input;
     expect(Object.keys(submitInput)).toEqual([
+      "approval_asset",
+      "approval_path",
+      "approval_url",
       "cascade_url",
       "asset_title",
       "asset_display_name",
@@ -611,6 +617,9 @@ describe("draft tools", () => {
       "expected_revision",
     ]);
     expect(submitInput).toMatchObject({
+      approval_asset: "Example Program, B.A.",
+      approval_path: "/academics/example",
+      approval_url: cascadeUrl,
       cascade_url: cascadeUrl,
       asset_title: "Example program",
       asset_display_name: "Example Program, B.A.",
@@ -627,6 +636,9 @@ describe("draft tools", () => {
       draft_handle: openedBody.draft_handle,
     });
     expect(validated.structuredContent as Record<string, any>).toMatchObject({
+      approval_asset: "Example Program, B.A.",
+      approval_path: "/academics/example",
+      approval_url: cascadeUrl,
       cascade_url: cascadeUrl,
       asset_title: "Example program",
       asset_display_name: "Example Program, B.A.",
@@ -657,6 +669,104 @@ describe("draft tools", () => {
     expect(rejected.isError).toBe(true);
     expect(firstText(rejected)).toContain("asset_path does not match");
     expect(client.edit).not.toHaveBeenCalled();
+
+    const rejectedPreview = await findTool(tools, "local_draft_submit").handler({
+      ...submitInput,
+      approval_asset: "Wrong asset",
+    });
+
+    expect(rejectedPreview.isError).toBe(true);
+    expect(firstText(rejectedPreview)).toContain("approval_asset does not match");
+    expect(client.edit).not.toHaveBeenCalled();
+  });
+
+  test("uses the browser block type for every block draft URL", async () => {
+    const blockTypes = [
+      "feedBlock",
+      "indexBlock",
+      "textBlock",
+      "twitterFeedBlock",
+      "xhtmlDataDefinitionBlock",
+      "xmlBlock",
+    ] as const;
+
+    for (const assetKey of blockTypes) {
+      const { server, tools } = makeMockServer();
+      const assetCache = createAssetCache();
+      const readEntry = assetCache.put({
+        success: true,
+        asset: {
+          [assetKey]: {
+            id: `${assetKey}-001`,
+            name: "example-block",
+            path: "/blocks/example-block",
+            parentFolderPath: "/blocks",
+            siteName: "example-site",
+          },
+        },
+      });
+
+      registerDraftTools(server as any, createMockClient(), {
+        cache: createResponseCache(),
+        assetCache,
+        draftCache: createDraftCache(),
+        cascadeBrowserUrl: "https://example.cascadecms.com",
+      });
+
+      const opened = await findTool(tools, "local_draft_open").handler({
+        operation: "edit",
+        asset_handle: readEntry.handle,
+        expected_raw_hash: readEntry.rawHash,
+      });
+      const body = opened.structuredContent as Record<string, any>;
+
+      expect(body.asset_type).toBe(assetKey);
+      expect(body.approval_asset).toBe("example-block");
+      expect(body.cascade_url).toBe(
+        `https://example.cascadecms.com/entity/open.act?id=${assetKey}-001&type=block`,
+      );
+    }
+  });
+
+  test("reads block title and display name from wired metadata", async () => {
+    const { server, tools } = makeMockServer();
+    const assetCache = createAssetCache();
+    const readEntry = assetCache.put({
+      success: true,
+      asset: {
+        xhtmlDataDefinitionBlock: {
+          id: "block-001",
+          name: "example-block",
+          path: "/blocks/example-block",
+          parentFolderPath: "/blocks",
+          siteName: "example-site",
+          metadata: {
+            title: "Example block title",
+            displayName: "Example Block",
+          },
+        },
+      },
+    });
+
+    registerDraftTools(server as any, createMockClient(), {
+      cache: createResponseCache(),
+      assetCache,
+      draftCache: createDraftCache(),
+    });
+
+    const opened = await findTool(tools, "local_draft_open").handler({
+      operation: "edit",
+      asset_handle: readEntry.handle,
+      expected_raw_hash: readEntry.rawHash,
+    });
+
+    expect(opened.structuredContent).toMatchObject({
+      approval_asset: "Example Block",
+      approval_path: "/blocks/example-block",
+      approval_url: null,
+      asset_title: "Example block title",
+      asset_display_name: "Example Block",
+    });
   });
 
   test("identifies create drafts without paths in approval context", async () => {

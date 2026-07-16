@@ -4,6 +4,10 @@ All notable changes to `cascade-cms-mcp-server` will be documented here.
 
 ## Unreleased
 
+### Added
+
+- Draft open and validation responses now include `approval_asset`, `approval_path`, and `approval_url` aliases for compact approval previews. Submit accepts these optional aliases and verifies every supplied value against the current draft.
+
 ### Breaking Changes
 
 - `local_draft_submit` now requires approval context fields for the Cascade URL, title, display name, asset and parent placement, asset type, asset name, site name, and site ID. Copy the final values from `local_draft_validate` after any patch that could change them.
@@ -13,6 +17,10 @@ All notable changes to `cascade-cms-mcp-server` will be documented here.
 
 - Oversized response envelopes and `read_response` now expose `characters_total` and `characters_returned`; offsets and character counts use JavaScript UTF-16 code units. `bytes_total` and `bytes_returned` remain as deprecated compatibility aliases and are not byte counts.
 - `CASCADE_BROWSER_URL` is now normalized and validated before server tools use it. It must use HTTPS. Its host must match the `CASCADE_URL` host, have a parent/subdomain relationship, or share the `cascadecms.com` service domain. Credentials, queries, and fragments are rejected.
+
+### Fixed
+
+- Draft browser URLs for all block subtypes now use Cascade's generic `type=block` editor URL.
 
 ## 2.0.1 - 2026-06-30
 

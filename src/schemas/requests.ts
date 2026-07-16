@@ -1127,6 +1127,27 @@ export type DraftValidateInput = z.infer<typeof DraftValidateRequestSchema>;
 
 export const DraftSubmitRequestSchema = z
   .object({
+    approval_asset: z
+      .string()
+      .nullable()
+      .optional()
+      .describe(
+        "Optional approval-preview alias. Copy approval_asset from local_draft_open or local_draft_validate; it uses display name, title, then asset name as fallback.",
+      ),
+    approval_path: z
+      .string()
+      .nullable()
+      .optional()
+      .describe(
+        "Optional approval-preview alias. Copy approval_path from local_draft_open or local_draft_validate.",
+      ),
+    approval_url: z
+      .url()
+      .nullable()
+      .optional()
+      .describe(
+        "Optional approval-preview alias. Copy approval_url from local_draft_open or local_draft_validate.",
+      ),
     cascade_url: z
       .url()
       .nullable()
