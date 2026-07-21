@@ -7,6 +7,7 @@
 
 import { CascadeAPI } from "cascade-cms-api";
 import type { Config } from "./config.js";
+import { OperationLimiter } from "./operationLimiter.js";
 
 /**
  * The concrete client object returned by `CascadeAPI(...)` — includes all
@@ -18,5 +19,22 @@ export type CascadeClient = ReturnType<typeof CascadeAPI>;
  * Construct a Cascade API client from validated config.
  */
 export function createCascadeClient(config: Config): CascadeClient {
-  return CascadeAPI({ apiKey: config.apiKey, url: config.url }, config.timeoutMs);
+  const client = CascadeAPI(
+    { apiKey: config.apiKey, url: config.url },
+    config.timeoutMs,
+  );
+  const limiter = new OperationLimiter({
+    maxConcurrent: config.maxConcurrentRequests,
+  });
+  const methods = client as unknown as Record<
+    string,
+    (...args: never[]) => unknown
+  >;
+
+  return Object.fromEntries(
+    Object.entries(methods).map(([name, method]) => [
+      name,
+      (...args: never[]) => limiter.run(() => method.apply(client, args)),
+    ]),
+  ) as CascadeClient;
 }

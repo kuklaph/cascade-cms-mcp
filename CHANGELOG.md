@@ -7,6 +7,7 @@ All notable changes to `cascade-cms-mcp-server` will be documented here.
 ### Added
 
 - Draft open and validation responses now include `approval_asset`, `approval_path`, and `approval_url` aliases for compact approval previews. Submit accepts these optional aliases and verifies every supplied value against the current draft.
+- Added `CASCADE_MAX_CONCURRENT_REQUESTS` to configure concurrent logical Cascade API operations per MCP process. The default is 10.
 
 ### Breaking Changes
 
@@ -17,9 +18,12 @@ All notable changes to `cascade-cms-mcp-server` will be documented here.
 
 - Oversized response envelopes and `read_response` now expose `characters_total` and `characters_returned`; offsets and character counts use JavaScript UTF-16 code units. `bytes_total` and `bytes_returned` remain as deprecated compatibility aliases and are not byte counts.
 - `CASCADE_BROWSER_URL` is now normalized and validated before server tools use it. It must use HTTPS. Its host must match the `CASCADE_URL` host, have a parent/subdomain relationship, or share the `cascadecms.com` service domain. Credentials, queries, and fragments are rejected.
+- Normal Cascade API operations now use a FIFO concurrency limit that covers each complete logical operation, including retries. Additional normal operations wait without a fixed queue cap. This limits logical operations rather than physical HTTP fetches.
+- Browser session operations now run one at a time through validation, login or site selection, cookie use, expiry recovery, retry, and completion. The existing 3-second browser request-start spacing remains unchanged.
 
 ### Fixed
 
+- Expired browser workflows now re-authenticate and retry in the explicitly selected active site instead of reverting to the configured `CASCADE_BROWSER_SITE_ID`.
 - Draft browser URLs for all block subtypes now use Cascade's generic `type=block` editor URL.
 
 ## 2.0.1 - 2026-06-30

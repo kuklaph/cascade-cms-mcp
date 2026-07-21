@@ -75,7 +75,7 @@ For UI-based clients, enter the same values:
 | ----------- | --------------------------------------------------------------- | ------------------------------ |
 | Command     | `bunx`                                                          | `npx`                          |
 | Arguments   | `cascade-cms-mcp-server`                                        | `-y`, `cascade-cms-mcp-server` |
-| Environment | `CASCADE_API_KEY`, `CASCADE_URL`, browser env values when using browser-backed tools, optional `CASCADE_TIMEOUT_MS` | Same                           |
+| Environment | `CASCADE_API_KEY`, `CASCADE_URL`, browser env values when using browser-backed tools, optional request limit and timeout values | Same                           |
 
 Restart the client after config changes. Call `server_version` to confirm the server is running.
 
@@ -138,10 +138,19 @@ Example:
 | `CASCADE_API_KEY`          |     Yes     | API key generated from your Cascade dashboard                         |
 | `CASCADE_URL`              |     Yes     | Cascade API URL, for example `https://yourorg.cascadecms.com/api/v1/` |
 | `CASCADE_TIMEOUT_MS`       |     No      | Request timeout in milliseconds. Default: `30000`                     |
+| `CASCADE_MAX_CONCURRENT_REQUESTS` | No | Concurrent logical Cascade API operations per MCP process. Default: `10` |
 | `CASCADE_BROWSER_USERNAME` | Browser API | Browser UI username for browser-backed tools                          |
 | `CASCADE_BROWSER_PASSWORD` | Browser API | Browser UI password for browser-backed tools                          |
 | `CASCADE_BROWSER_SITE_ID`  | Browser API | Cascade site ID for browser-backed tools. Use the [production site ID](#find-the-site-id) by default |
 | `CASCADE_BROWSER_URL`      |     No      | HTTPS browser UI root URL. Defaults to the origin derived from `CASCADE_URL`. Set this when the browser login host or root path differs |
+
+The server runs up to 10 normal Cascade API operations concurrently by default. Set `CASCADE_MAX_CONCURRENT_REQUESTS` to a positive safe integer to change the limit. Each permit covers one complete logical client operation, including upstream retries. Additional operations wait in FIFO order until a permit becomes available; the normal-operation waiting queue has no fixed limit. `CASCADE_TIMEOUT_MS` begins when the queued operation starts, not while it waits.
+
+This is a logical-operation limit, not an exact physical-fetch limit. One upstream operation may issue multiple HTTP requests, so physical request concurrency can exceed `CASCADE_MAX_CONCURRENT_REQUESTS`.
+
+Rare timeout limitation: the upstream client reports a timeout without aborting the underlying fetch. A timed-out fetch may remain active briefly after the logical operation releases its permit.
+
+`CASCADE_MAX_CONCURRENT_REQUESTS` applies only to normal Cascade client calls. Purely local operations do not consume permits, and browser-backed operations use the separate serialized queue below. Composite workflows acquire a permit for each normal client call rather than for the entire MCP tool invocation.
 
 ### Browser API Setup
 
@@ -155,7 +164,7 @@ Recommended browser setup:
 
 The site ID is required because Cascade's browser UI keeps an active site context. Browser login calls `switchSite.act` after authentication to mirror selecting a site in Cascade's site picker.
 
-Browser-backed requests start at most once every 3 seconds per MCP session to avoid pressuring Cascade's browser UI endpoints. This applies to startup login, auto-login, retries, draft checks, and snippet tools. Standard Cascade API tools are unaffected.
+Browser session operations run one at a time per MCP session so login, site selection, cookie use, expiry recovery, and retries cannot interleave. Up to 20 additional browser session operations wait in FIFO order. Browser-backed physical requests still start at most once every 3 seconds per MCP session to avoid pressuring Cascade's browser UI endpoints. Standard Cascade API operations use the separate concurrency limit above.
 
 #### Find the Site ID
 

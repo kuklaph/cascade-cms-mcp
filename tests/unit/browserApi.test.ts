@@ -44,7 +44,9 @@ const response = ({
 });
 
 const fetchQueue = (
-  responses: Array<ReturnType<typeof response>>,
+  responses: Array<
+    ReturnType<typeof response> | Promise<ReturnType<typeof response>>
+  >,
   onFetch?: () => void,
 ) => {
   const calls: Array<{ url: string; options: RequestInit }> = [];
@@ -56,6 +58,26 @@ const fetchQueue = (
     return next;
   });
   return { calls, fetchImpl };
+};
+
+const deferred = <T,>() => {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, reject, resolve };
+};
+
+const waitForCallCount = async (
+  calls: Array<unknown>,
+  expected: number,
+) => {
+  for (let attempt = 0; attempt < 50 && calls.length < expected; attempt += 1) {
+    await Promise.resolve();
+  }
+  expect(calls).toHaveLength(expected);
 };
 
 const fakeClock = () => {
@@ -85,6 +107,7 @@ const configured = {
   apiKey: "api-key",
   url: "https://example.cascadecms.com/api/v1/",
   timeoutMs: 30000,
+  maxConcurrentRequests: 10,
   browserUsername: "user+name@example.com & admin",
   browserPassword: "p@ss word&=+",
 };
@@ -342,6 +365,7 @@ describe("createBrowserSession", () => {
         apiKey: "api-key",
         url: "https://example.cascadecms.com/api/v1/",
         timeoutMs: 30000,
+        maxConcurrentRequests: 10,
       },
       fetchImpl as any,
     );
@@ -909,5 +933,156 @@ describe("createBrowserSession", () => {
       'List snippets failed with HTTP 400: {"success":false,"message":"Bad snippet"}',
     );
     expect(session.hasSession()).toBe(true);
+  });
+
+  test("serializes concurrent cold workflows so they share one login", async () => {
+    const firstCheck = deferred<ReturnType<typeof response>>();
+    const { calls, fetchImpl } = fetchQueue([
+      ...loginResponses(),
+      firstCheck.promise,
+      response({ text: async () => "{}" }),
+    ]);
+    const session = createFastBrowserSession(configuredWithSiteId, fetchImpl as any);
+
+    const first = session.checkDraft({ assetId: "asset-1", assetType: "page" });
+    const second = session.checkDraft({ assetId: "asset-2", assetType: "page" });
+    await waitForCallCount(calls, 4);
+    expect(calls.filter(({ url }) => url.endsWith("/loginsubmit.act"))).toHaveLength(1);
+
+    firstCheck.resolve(response({ text: async () => "{}" }));
+    await Promise.all([first, second]);
+
+    expect(calls).toHaveLength(5);
+    expect(calls.filter(({ url }) => url.endsWith("/loginsubmit.act"))).toHaveLength(1);
+  });
+
+  test("finishes expired-session re-login before a queued workflow uses the new cookie", async () => {
+    const { calls, fetchImpl } = fetchQueue([
+      ...loginResponses({
+        initHeaders: headersFrom({ get: () => "JSESSIONID=old; Path=/" }),
+      }),
+      response({ ok: false, status: 401, text: async () => "Unauthorized" }),
+      ...loginResponses({
+        initHeaders: headersFrom({ get: () => "JSESSIONID=new; Path=/" }),
+      }),
+      response({ json: async () => ({ snippets: [] }) }),
+      response({ text: async () => "{}" }),
+    ]);
+    const session = createFastBrowserSession(configuredWithSiteId, fetchImpl as any);
+
+    await Promise.all([
+      session.listSnippets({ limit: 50, offset: 0 }),
+      session.checkDraft({ assetId: "asset-2", assetType: "page" }),
+    ]);
+
+    expect(calls.filter(({ url }) => url.endsWith("/loginsubmit.act"))).toHaveLength(2);
+    expect(calls.at(-1)?.options.headers).toMatchObject({ cookie: "JSESSIONID=new" });
+  });
+
+  test("recovers an expired browser mutation in the explicitly selected site", async () => {
+    const { calls, fetchImpl } = fetchQueue([
+      ...loginResponses(),
+      response({ ok: false, status: 401, text: async () => "Unauthorized" }),
+      ...loginResponses(),
+      response({
+        json: async () => ({ success: "Snippet created successfully." }),
+      }),
+    ]);
+    const session = createFastBrowserSession(configuredWithSiteId, fetchImpl as any);
+    await session.login({ siteId: "selected-site" });
+
+    await session.createSnippet({
+      title: "Example",
+      name: "example",
+      value: "Example content",
+    });
+
+    expect(
+      calls
+        .filter(({ url }) => url.includes("/switchSite.act"))
+        .map(({ url }) => url),
+    ).toEqual([
+      "https://example.cascadecms.com/switchSite.act?siteId=selected-site",
+      "https://example.cascadecms.com/switchSite.act?siteId=selected-site",
+    ]);
+  });
+
+  test("releases the session queue after a workflow failure", async () => {
+    const failedFetch = deferred<ReturnType<typeof response>>();
+    const { calls, fetchImpl } = fetchQueue([
+      ...loginResponses(),
+      failedFetch.promise,
+      response({ text: async () => "{}" }),
+    ]);
+    const session = createFastBrowserSession(configured, fetchImpl as any);
+    await session.login({ siteId: "site-123" });
+
+    const failed = session.listSnippets({ limit: 50, offset: 0 });
+    const next = session.checkDraft({ assetId: "asset-2", assetType: "page" });
+    await waitForCallCount(calls, 4);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(calls).toHaveLength(4);
+
+    failedFetch.reject(new Error("network failed"));
+    await expect(failed).rejects.toThrow("network failed");
+    await expect(next).resolves.toMatchObject({ asset_id: "asset-2" });
+    expect(calls).toHaveLength(5);
+  });
+
+  test("does not interleave an explicit login with a session-backed workflow", async () => {
+    const init = deferred<ReturnType<typeof response>>();
+    const [, loginResponse, switchResponse] = loginResponses();
+    const { calls, fetchImpl } = fetchQueue([
+      init.promise,
+      loginResponse,
+      switchResponse,
+      response({ json: async () => ({ snippets: [] }) }),
+    ]);
+    const session = createFastBrowserSession(configuredWithSiteId, fetchImpl as any);
+
+    const login = session.login({ siteId: "site-123" });
+    const workflow = session.listSnippets({ limit: 50, offset: 0 });
+    await waitForCallCount(calls, 1);
+
+    init.resolve(response({
+      headers: headersFrom({ get: () => "JSESSIONID=explicit; Path=/" }),
+    }));
+    await Promise.all([login, workflow]);
+
+    expect(calls.map(({ url }) => url)).toEqual([
+      "https://example.cascadecms.com",
+      "https://example.cascadecms.com/loginsubmit.act",
+      "https://example.cascadecms.com/switchSite.act?siteId=site-123",
+      "https://example.cascadecms.com/ajax/snippets.act",
+    ]);
+  });
+
+  test("rejects beyond 20 queued browser session operations without starting them", async () => {
+    const activeResponse = deferred<ReturnType<typeof response>>();
+    const { calls, fetchImpl } = fetchQueue([
+      ...loginResponses(),
+      activeResponse.promise,
+      ...Array.from({ length: 20 }, () =>
+        response({ json: async () => ({ snippets: [] }) }),
+      ),
+      response({ json: async () => ({ snippets: [] }) }),
+    ]);
+    const session = createFastBrowserSession(configured, fetchImpl as any);
+    await session.login({ siteId: "site-123" });
+
+    const active = session.listSnippets({ limit: 50, offset: 0 });
+    const queued = Array.from({ length: 20 }, () =>
+      session.listSnippets({ limit: 50, offset: 0 }),
+    );
+
+    await expect(session.listSnippets({ limit: 50, offset: 0 })).rejects.toThrow(
+      "Too many browser session operations are queued. Wait for current browser operations to finish, then retry.",
+    );
+    expect(calls).toHaveLength(4);
+
+    activeResponse.resolve(response({ json: async () => ({ snippets: [] }) }));
+    await Promise.all([active, ...queued]);
+    expect(calls).toHaveLength(24);
   });
 });

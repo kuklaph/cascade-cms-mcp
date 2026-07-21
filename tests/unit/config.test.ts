@@ -15,6 +15,7 @@ describe("loadConfig", () => {
       apiKey: "abc123",
       url: "https://cascade.example.edu/api",
       timeoutMs: 15000,
+      maxConcurrentRequests: 10,
     });
   });
 
@@ -98,6 +99,47 @@ describe("loadConfig", () => {
     expect(cfg.timeoutMs).toBe(30000);
   });
 
+  test("should default maxConcurrentRequests to 10", async () => {
+    const cfg = await loadConfig({
+      CASCADE_API_KEY: "abc123",
+      CASCADE_URL: "https://tenant.cascadecms.com/api/v1",
+    } as NodeJS.ProcessEnv);
+
+    expect(cfg.maxConcurrentRequests).toBe(10);
+  });
+
+  test.each([
+    ["1", 1],
+    ["25", 25],
+  ])("should accept CASCADE_MAX_CONCURRENT_REQUESTS=%s", async (value, expected) => {
+    const cfg = await loadConfig({
+      CASCADE_API_KEY: "abc123",
+      CASCADE_URL: "https://tenant.cascadecms.com/api/v1",
+      CASCADE_MAX_CONCURRENT_REQUESTS: value,
+    } as NodeJS.ProcessEnv);
+
+    expect(cfg.maxConcurrentRequests).toBe(expected);
+  });
+
+  test.each(["0", "-1", "1.5", " 10 ", "many", "9007199254740992"])(
+    "should reject invalid CASCADE_MAX_CONCURRENT_REQUESTS value %s without echoing it",
+    async (value) => {
+      let thrown: Error | null = null;
+      try {
+        await loadConfig({
+          CASCADE_API_KEY: "abc123",
+          CASCADE_URL: "https://tenant.cascadecms.com/api/v1",
+          CASCADE_MAX_CONCURRENT_REQUESTS: value,
+        } as NodeJS.ProcessEnv);
+      } catch (error) {
+        thrown = error as Error;
+      }
+
+      expect(thrown?.message).toContain("CASCADE_MAX_CONCURRENT_REQUESTS");
+      expect(thrown?.message).not.toContain(value);
+    },
+  );
+
   test("should throw with CASCADE_TIMEOUT_MS named when value is non-numeric", async () => {
     const env = {
       CASCADE_API_KEY: "abc123",
@@ -137,6 +179,7 @@ describe("loadConfig — dotseal decryption", () => {
     const decryptSpy = mock((v: string) => {
       if (v === "enc:abc") return "decrypted-key";
       if (v === "enc:xyz") return "https://decrypted.example.edu/api";
+      if (v === "enc:limit") return "12";
       throw new Error(`unexpected ciphertext: ${v}`);
     });
     mock.module("dotseal", () => ({ decrypt: decryptSpy }));
@@ -144,13 +187,15 @@ describe("loadConfig — dotseal decryption", () => {
     const env = {
       CASCADE_API_KEY: "enc:abc",
       CASCADE_URL: "enc:xyz",
+      CASCADE_MAX_CONCURRENT_REQUESTS: "enc:limit",
     };
 
     const cfg = await loadConfig(env as NodeJS.ProcessEnv);
 
     expect(cfg.apiKey).toBe("decrypted-key");
     expect(cfg.url).toBe("https://decrypted.example.edu/api");
-    expect(decryptSpy).toHaveBeenCalledTimes(2);
+    expect(cfg.maxConcurrentRequests).toBe(12);
+    expect(decryptSpy).toHaveBeenCalledTimes(3);
   });
 
   test("should throw clean error when decryption fails, without leaking ciphertext", async () => {

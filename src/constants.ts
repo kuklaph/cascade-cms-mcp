@@ -6,6 +6,7 @@ export const CHARACTER_LIMIT = 25000;
 export const SERVER_NAME = "cascade-cms-mcp-server";
 export const SERVER_VERSION = "2.0.1";
 export const DEFAULT_TIMEOUT_MS = 30000;
+export const DEFAULT_MAX_CONCURRENT_REQUESTS = 10;
 
 /** Max chars rendered into `content[0].text` when minting a cache handle. */
 export const PREVIEW_LIMIT = 20_000;

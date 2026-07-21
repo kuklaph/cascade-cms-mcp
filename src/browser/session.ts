@@ -1,4 +1,5 @@
 import type { Config } from "../config.js";
+import { OperationLimiter } from "../operationLimiter.js";
 import { checkDraft } from "./checkDraft.js";
 import {
   browserBaseUrlFromApiUrl,
@@ -34,6 +35,10 @@ import type {
 
 export { browserBaseUrlFromApiUrl, resolveBrowserRootUrl } from "./http.js";
 
+const BROWSER_SESSION_MAX_QUEUED_OPERATIONS = 20;
+const BROWSER_SESSION_QUEUE_FULL_MESSAGE =
+  "Too many browser session operations are queued. Wait for current browser operations to finish, then retry.";
+
 export function createBrowserSession(
   config: Config,
   fetchImpl: BrowserFetch = fetch as BrowserFetch,
@@ -52,8 +57,14 @@ class BrowserApiSession implements BrowserSession {
   private readonly fetchImpl: BrowserFetch;
   private readonly timeoutSignal: TimeoutSignalFactory;
   private readonly throttle: BrowserRequestThrottle;
+  private readonly sessionLimiter = new OperationLimiter({
+    maxConcurrent: 1,
+    maxQueued: BROWSER_SESSION_MAX_QUEUED_OPERATIONS,
+    queueFullMessage: BROWSER_SESSION_QUEUE_FULL_MESSAGE,
+  });
   private readonly cookies = new Map<string, string>();
   private authenticated = false;
+  private activeSiteId?: string;
 
   constructor(
     config: Config,
@@ -72,10 +83,15 @@ class BrowserApiSession implements BrowserSession {
   }
 
   async login(args: { siteId?: string }): Promise<BrowserLoginResult> {
+    return this.sessionLimiter.run(() => this.loginUnlocked(args));
+  }
+
+  private async loginUnlocked(args: { siteId?: string }): Promise<BrowserLoginResult> {
     this.assertConfigured();
     const siteId = this.resolveSiteId(args.siteId);
     this.cookies.clear();
     this.authenticated = false;
+    this.activeSiteId = undefined;
 
     const cookies = new Map<string, string>();
     await this.init(cookies);
@@ -86,6 +102,7 @@ class BrowserApiSession implements BrowserSession {
       this.cookies.set(name, value);
     }
     this.authenticated = true;
+    this.activeSiteId = siteId;
 
     return {
       success: true,
@@ -216,29 +233,34 @@ class BrowserApiSession implements BrowserSession {
     expiredMessage =
       "Browser session expired. Run browser_login, then retry the browser-backed tool.",
   ): Promise<T> {
-    if (!this.hasSession()) {
-      this.assertConfigured();
-      if (!this.defaultSiteId) {
-        throw new Error(
-          "Browser session is not authenticated and CASCADE_BROWSER_SITE_ID is not configured. Set CASCADE_BROWSER_SITE_ID to the production site ID, then restart the MCP server. To find it, select the production site in Cascade, open Manage Site, and copy the site ID from the browser URL. As a temporary recovery path, run browser_login with site_id first.",
-        );
-      }
-      await this.login({});
-    }
-
-    try {
-      return await operation();
-    } catch (err) {
-      if (err instanceof BrowserSessionExpiredError) {
-        this.invalidateSession();
-        if (this.defaultSiteId) {
-          await this.login({});
-          return await operation();
+    return this.sessionLimiter.run(async () => {
+      if (!this.hasSession()) {
+        this.assertConfigured();
+        if (!this.defaultSiteId) {
+          throw new Error(
+            "Browser session is not authenticated and CASCADE_BROWSER_SITE_ID is not configured. Set CASCADE_BROWSER_SITE_ID to the production site ID, then restart the MCP server. To find it, select the production site in Cascade, open Manage Site, and copy the site ID from the browser URL. As a temporary recovery path, run browser_login with site_id first.",
+          );
         }
-        throw new Error(expiredMessage);
+        await this.loginUnlocked({});
       }
-      throw err;
-    }
+
+      try {
+        return await operation();
+      } catch (err) {
+        if (err instanceof BrowserSessionExpiredError) {
+          const siteId = this.defaultSiteId
+            ? this.activeSiteId ?? this.defaultSiteId
+            : undefined;
+          this.invalidateSession();
+          if (siteId) {
+            await this.loginUnlocked({ siteId });
+            return await operation();
+          }
+          throw new Error(expiredMessage);
+        }
+        throw err;
+      }
+    });
   }
 
   private context() {
@@ -264,6 +286,7 @@ class BrowserApiSession implements BrowserSession {
   private invalidateSession(): void {
     this.cookies.clear();
     this.authenticated = false;
+    this.activeSiteId = undefined;
   }
 
   private rememberCookies(

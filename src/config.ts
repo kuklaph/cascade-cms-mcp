@@ -10,12 +10,16 @@
  */
 
 import { z } from "zod";
-import { DEFAULT_TIMEOUT_MS } from "./constants.js";
+import {
+  DEFAULT_MAX_CONCURRENT_REQUESTS,
+  DEFAULT_TIMEOUT_MS,
+} from "./constants.js";
 
 export type Config = {
   apiKey: string;
   url: string;
   timeoutMs: number;
+  maxConcurrentRequests: number;
   browserUsername?: string;
   browserPassword?: string;
   browserUrl?: string;
@@ -36,6 +40,15 @@ const ConfigSchema = z.object({
     .refine(
       (v) => v === undefined || /^\d+$/.test(v),
       "CASCADE_TIMEOUT_MS must be a positive integer (milliseconds)",
+    ),
+  CASCADE_MAX_CONCURRENT_REQUESTS: z
+    .string()
+    .optional()
+    .refine(
+      (v) =>
+        v === undefined ||
+        (/^\d+$/.test(v) && Number(v) > 0 && Number.isSafeInteger(Number(v))),
+      "CASCADE_MAX_CONCURRENT_REQUESTS must be a positive safe integer",
     ),
   CASCADE_BROWSER_USERNAME: z
     .string()
@@ -117,6 +130,7 @@ export async function loadConfig(
   let apiKey: string | undefined;
   let url: string | undefined;
   let timeoutMs: string | undefined;
+  let maxConcurrentRequests: string | undefined;
   let browserUsername: string | undefined;
   let browserPassword: string | undefined;
   let browserUrl: string | undefined;
@@ -135,6 +149,11 @@ export async function loadConfig(
   ({ value: timeoutMs, dotseal } = await decryptIfNeeded(
     "CASCADE_TIMEOUT_MS",
     env.CASCADE_TIMEOUT_MS,
+    dotseal,
+  ));
+  ({ value: maxConcurrentRequests, dotseal } = await decryptIfNeeded(
+    "CASCADE_MAX_CONCURRENT_REQUESTS",
+    env.CASCADE_MAX_CONCURRENT_REQUESTS,
     dotseal,
   ));
   ({ value: browserUsername, dotseal } = await decryptIfNeeded(
@@ -162,6 +181,7 @@ export async function loadConfig(
     CASCADE_API_KEY: apiKey,
     CASCADE_URL: url,
     CASCADE_TIMEOUT_MS: timeoutMs,
+    CASCADE_MAX_CONCURRENT_REQUESTS: maxConcurrentRequests,
     CASCADE_BROWSER_USERNAME: browserUsername,
     CASCADE_BROWSER_PASSWORD: browserPassword,
     CASCADE_BROWSER_URL: browserUrl,
@@ -184,6 +204,9 @@ export async function loadConfig(
     timeoutMs: data.CASCADE_TIMEOUT_MS
       ? Number(data.CASCADE_TIMEOUT_MS)
       : DEFAULT_TIMEOUT_MS,
+    maxConcurrentRequests: data.CASCADE_MAX_CONCURRENT_REQUESTS
+      ? Number(data.CASCADE_MAX_CONCURRENT_REQUESTS)
+      : DEFAULT_MAX_CONCURRENT_REQUESTS,
     ...(data.CASCADE_BROWSER_USERNAME
       ? { browserUsername: data.CASCADE_BROWSER_USERNAME }
       : {}),
