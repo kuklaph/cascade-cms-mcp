@@ -569,7 +569,7 @@ describe("draft tools", () => {
       cache: createResponseCache(),
       assetCache,
       draftCache: createDraftCache(),
-      cascadeBrowserUrl: "https://example.cascadecms.com",
+      cascadeUrl: "https://tenant.cascadecms.com/api/v1/",
     });
 
     const opened = await findTool(tools, "local_draft_open").handler({
@@ -579,7 +579,7 @@ describe("draft tools", () => {
     });
     const openedBody = opened.structuredContent as Record<string, any>;
     const cascadeUrl =
-      "https://example.cascadecms.com/entity/open.act?id=page-001&type=page";
+      "https://tenant.cascadecms.com/entity/open.act?id=page-001&type=page";
 
     expect(openedBody.cascade_url).toBe(cascadeUrl);
     expect(openedBody).toMatchObject({
@@ -710,7 +710,7 @@ describe("draft tools", () => {
         cache: createResponseCache(),
         assetCache,
         draftCache: createDraftCache(),
-        cascadeBrowserUrl: "https://example.cascadecms.com",
+        cascadeUrl: "https://example.cascadecms.com/api/v1/",
       });
 
       const opened = await findTool(tools, "local_draft_open").handler({

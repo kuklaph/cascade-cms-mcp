@@ -4,6 +4,8 @@ All notable changes to `cascade-cms-mcp-server` will be documented here.
 
 ## Unreleased
 
+## 2.1.0 - 2026-07-23
+
 ### Added
 
 - Draft open and validation responses now include `approval_asset`, `approval_path`, and `approval_url` aliases for compact approval previews. Submit accepts these optional aliases and verifies every supplied value against the current draft.
@@ -16,6 +18,7 @@ All notable changes to `cascade-cms-mcp-server` will be documented here.
 
 ### Changed
 
+- Updated `@modelcontextprotocol/server` from `2.0.0-alpha.2` to `2.0.0-beta.5` and removed the no-longer-required direct `@cfworker/json-schema` dependency.
 - Oversized response envelopes and `read_response` now expose `characters_total` and `characters_returned`; offsets and character counts use JavaScript UTF-16 code units. `bytes_total` and `bytes_returned` remain as deprecated compatibility aliases and are not byte counts.
 - `CASCADE_BROWSER_URL` is now normalized and validated before server tools use it. It must use HTTPS. Its host must match the `CASCADE_URL` host, have a parent/subdomain relationship, or share the `cascadecms.com` service domain. Credentials, queries, and fragments are rejected.
 - Normal Cascade API operations now use a FIFO concurrency limit that covers each complete logical operation, including retries. Additional normal operations wait without a fixed queue cap. This limits logical operations rather than physical HTTP fetches.
@@ -23,6 +26,7 @@ All notable changes to `cascade-cms-mcp-server` will be documented here.
 
 ### Fixed
 
+- Draft approval asset URLs now use the origin of `CASCADE_URL`; `CASCADE_BROWSER_URL` remains limited to browser-backed operations.
 - Expired browser workflows now re-authenticate and retry in the explicitly selected active site instead of reverting to the configured `CASCADE_BROWSER_SITE_ID`.
 - Draft browser URLs for all block subtypes now use Cascade's generic `type=block` editor URL.
 

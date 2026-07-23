@@ -1145,7 +1145,7 @@ describe("createServer (server factory)", () => {
     });
     const server = createServer(client, {
       toolBlockStore: emptyToolBlockStore(),
-      cascadeBrowserUrl: "https://example.cascadecms.com",
+      cascadeUrl: "https://example.cascadecms.com/api/v1/",
     });
     const transport = await connectTestTransport(server);
 

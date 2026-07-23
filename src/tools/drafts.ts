@@ -177,7 +177,7 @@ export function registerDraftTools(
       );
       draft = draftCache.createFromAsset("create", args.asset ?? {});
     }
-    const approvalFields = draftApprovalFields(draft, resolved.cascadeBrowserUrl);
+    const approvalFields = draftApprovalFields(draft, resolved.cascadeUrl);
     return {
       success: true,
       ...draftSummary(draft),
@@ -203,7 +203,7 @@ export function registerDraftTools(
       resolved,
     );
     const draft = draftCache.createFromAsset("create", scaffold.asset);
-    const approvalFields = draftApprovalFields(draft, resolved.cascadeBrowserUrl);
+    const approvalFields = draftApprovalFields(draft, resolved.cascadeUrl);
     return {
       success: true,
       ...draftSummary(draft),
@@ -250,7 +250,7 @@ export function registerDraftTools(
     );
     await assertToolBlockAllowed("create", { asset: scaffold.asset }, resolved);
     const draft = draftCache.createFromAsset("create", scaffold.asset);
-    const approvalFields = draftApprovalFields(draft, resolved.cascadeBrowserUrl);
+    const approvalFields = draftApprovalFields(draft, resolved.cascadeUrl);
 
     return {
       success: true,
@@ -382,7 +382,7 @@ export function registerDraftTools(
     discard_on_success?: boolean;
   } & DraftApprovalFields & Partial<DraftApprovalPreviewFields>): Promise<Record<string, unknown>> {
     const draft = getDraftEntry(draftCache, args.draft_handle);
-    const approvalFields = draftApprovalFields(draft, resolved.cascadeBrowserUrl);
+    const approvalFields = draftApprovalFields(draft, resolved.cascadeUrl);
     assertDraftApprovalFieldsMatch(
       args,
       approvalFields,
@@ -658,7 +658,7 @@ export function registerDraftTools(
           materializeDraftRoot(draft, "placeholder"),
           resolved,
         );
-        return validateDraft(draft, draftApprovalFields(draft, resolved.cascadeBrowserUrl));
+        return validateDraft(draft, draftApprovalFields(draft, resolved.cascadeUrl));
       }
       case "local_draft_submit":
         return submitDraft(parsed as any);
@@ -926,7 +926,7 @@ export function registerDraftTools(
         materializeDraftRoot(draft, "placeholder"),
         resolved,
       );
-      return validateDraft(draft, draftApprovalFields(draft, resolved.cascadeBrowserUrl));
+      return validateDraft(draft, draftApprovalFields(draft, resolved.cascadeUrl));
     },
   }, resolved);
 
@@ -1502,12 +1502,12 @@ function validateDraft(
 
 function draftCascadeUrl(
   entry: DraftCacheEntry,
-  browserUrl: string | undefined,
+  cascadeUrl: string | undefined,
 ): string | null {
-  if (entry.operation !== "edit" || !browserUrl || !entry.sourceIdentifier?.id) {
+  if (entry.operation !== "edit" || !cascadeUrl || !entry.sourceIdentifier?.id) {
     return null;
   }
-  const root = browserUrl.replace(/\/+$/, "");
+  const root = new URL(cascadeUrl).origin;
   const id = encodeURIComponent(entry.sourceIdentifier.id);
   const sourceType = entry.sourceIdentifier.type;
   const type = encodeURIComponent(sourceType.startsWith("block_") ? "block" : sourceType);
@@ -1516,12 +1516,12 @@ function draftCascadeUrl(
 
 function draftApprovalFields(
   entry: DraftCacheEntry,
-  browserUrl: string | undefined,
+  cascadeUrl: string | undefined,
 ): DraftApprovalFields {
   const asset = entry.index.asset;
   const metadata = asset && isRecord(asset.metadata) ? asset.metadata : undefined;
   return {
-    cascade_url: draftCascadeUrl(entry, browserUrl),
+    cascade_url: draftCascadeUrl(entry, cascadeUrl),
     asset_title: firstString(metadata?.title, asset?.title),
     asset_display_name: firstString(metadata?.displayName, asset?.displayName),
     asset_path: draftAssetPath(asset),

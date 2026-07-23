@@ -4,7 +4,7 @@
 
 export const CHARACTER_LIMIT = 25000;
 export const SERVER_NAME = "cascade-cms-mcp-server";
-export const SERVER_VERSION = "2.0.1";
+export const SERVER_VERSION = "2.1.0";
 export const DEFAULT_TIMEOUT_MS = 30000;
 export const DEFAULT_MAX_CONCURRENT_REQUESTS = 10;
 

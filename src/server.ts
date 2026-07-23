@@ -61,8 +61,8 @@ export function createServer(
     draftCache: deps?.draftCache ?? createDraftCache(),
     toolBlockStore: deps?.toolBlockStore ?? createToolBlockStore(),
     ...(deps?.browserSession ? { browserSession: deps.browserSession } : {}),
-    ...(deps?.cascadeBrowserUrl
-      ? { cascadeBrowserUrl: deps.cascadeBrowserUrl }
+    ...(deps?.cascadeUrl
+      ? { cascadeUrl: deps.cascadeUrl }
       : {}),
   };
 
