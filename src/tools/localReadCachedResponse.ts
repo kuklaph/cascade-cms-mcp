@@ -17,25 +17,25 @@ import {
   buildCascadeToolDescription,
   type CascadeDeps,
 } from "./helper.js";
-import { ReadResponseRequestSchema } from "../schemas/requests.js";
+import { LocalReadCachedResponseRequestSchema } from "../schemas/requests.js";
 import {
   CHARACTER_LIMIT,
   OVERSIZE_RESPONSE_CACHE_MAX_ENTRIES,
 } from "../constants.js";
 
-export function registerReadResponseTool(
+export function registerLocalReadCachedResponseTool(
   server: McpServer,
   deps: CascadeDeps,
 ): void {
   registerCascadeTool(
     server,
     {
-      name: "read_response",
+      name: "local_read_cached_response",
       title: "Read cached MCP response slice",
       description: buildCascadeToolDescription(
-        `Retrieve a slice of a cached MCP response by handle (read_response).
+        `Retrieve a slice of a cached MCP response by handle (local_read_cached_response).
 
-When an MCP tool response exceeds the MCP character budget, the server caches the complete payload and returns a handle in structuredContent._cache.handle plus a preview in the text block. Use read_response to fetch the rest — either the remainder in chunks, or a targeted character range if you know the structure. Character counts and offsets are JavaScript UTF-16 code units.
+When an MCP tool response exceeds the MCP character budget, the server caches the complete payload and returns a handle in structuredContent._cache.handle plus a preview in the text block. Use local_read_cached_response to fetch the rest — either the remainder in chunks, or a targeted character range if you know the structure. Character counts and offsets are JavaScript UTF-16 code units.
 
 Args:
   - handle (string, required): The handle returned by a prior tool call's structuredContent._cache.handle (e.g. "h_550e8400-...").
@@ -65,7 +65,7 @@ Examples:
 Error Handling:
   - "Handle not found" — the handle was evicted (cache holds the last ${OVERSIZE_RESPONSE_CACHE_MAX_ENTRIES} oversize responses) or never existed. Re-run the originating tool.`,
       ),
-      inputSchema: ReadResponseRequestSchema,
+      inputSchema: LocalReadCachedResponseRequestSchema,
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -156,7 +156,7 @@ function sliceResponse(
     next_actions: has_more
       ? [
           {
-            tool: "read_response",
+            tool: "local_read_cached_response",
             reason: "Retrieve the next cached response slice.",
             input: {
               handle,

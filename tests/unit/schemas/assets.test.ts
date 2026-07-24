@@ -29,6 +29,8 @@ import {
   CreateAssetInputSchema,
   EditAssetInputSchema,
   ASSET_ENVELOPE_KEYS,
+  NamedAssetFields,
+  FolderContainedAssetFields,
 } from "../../../src/schemas/assets.js";
 import * as AssetEnums from "../../../src/schemas/assets/enums.js";
 
@@ -648,6 +650,13 @@ describe("AssetInputSchema (envelope union)", () => {
 describe("AssetInputSchema description", () => {
   test("carries a description for agent guidance", () => {
     expect(AssetInputSchema.description).toBeTruthy();
+  });
+
+  test("base asset placement descriptions use current API tool names", () => {
+    expect(NamedAssetFields.name.description).toContain("api_move");
+    expect(FolderContainedAssetFields.parentFolderPath.description).toContain(
+      "api_move",
+    );
   });
 });
 

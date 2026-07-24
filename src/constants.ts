@@ -11,7 +11,7 @@ export const DEFAULT_MAX_CONCURRENT_REQUESTS = 10;
 /** Max chars rendered into `content[0].text` when minting a cache handle. */
 export const PREVIEW_LIMIT = 20_000;
 
-/** Max cached oversized rendered tool responses retained for read_response. */
+/** Max cached oversized rendered responses retained for local_read_cached_response. */
 export const OVERSIZE_RESPONSE_CACHE_MAX_ENTRIES = 50;
 
 /** Max chars of rendered text stored per cache entry. Oversize entries are replaced with a marker. */

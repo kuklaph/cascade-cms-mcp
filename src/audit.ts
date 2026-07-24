@@ -29,7 +29,7 @@ function sanitizeErrorForAudit(raw: string): string {
 /**
  * Log a single tool invocation.
  *
- * @param toolName   - The MCP tool name (e.g. `read`).
+ * @param toolName   - The MCP tool name (e.g. `api_read`).
  * @param outcome    - `"ok"` on success, `"error"` when the handler threw.
  * @param durationMs - Wall-clock duration of the invocation in milliseconds.
  * @param errorMsg   - Optional raw error message (only used when outcome is `"error"`).

@@ -309,7 +309,7 @@ const AssetHandleField = {
       "asset_handle must look like 'a_<hex-uuid>'",
     )
     .describe(
-      "REQUIRED: Asset handle returned by read structuredContent.asset_handle.",
+      "REQUIRED: Asset handle returned by api_read structuredContent.asset_handle.",
     ),
 };
 
@@ -666,7 +666,7 @@ export const AssetGetNodeletRequestSchema = z
   .object({
     ...AssetHandleField,
     pointer: SafeJsonPointerSchema.describe(
-      `JSON Pointer returned by read preview root_outline or asset_list_nodelets. ${SafeJsonPointerRestrictionDescription}`,
+      `JSON Pointer returned by api_read preview root_outline or asset_list_nodelets. ${SafeJsonPointerRestrictionDescription}`,
     ),
     depth: z
       .number()
@@ -706,12 +706,14 @@ export const DraftOpenRequestSchema = z
   .object({
     operation: z
       .enum(["edit", "create"])
-      .describe("REQUIRED: Use edit to clone an asset_handle, or create to start a create draft."),
+      .describe(
+        'REQUIRED: Use "edit" to clone an asset_handle, or "create" to start a create draft.',
+      ),
     asset_handle: AssetHandleField.asset_handle
       .optional()
-      .describe("REQUIRED when operation is edit. Asset handle returned by read preview."),
+      .describe("REQUIRED when operation is edit. Asset handle returned by api_read preview."),
     expected_raw_hash: RawHashSchema.optional().describe(
-      "REQUIRED when operation is edit. raw_hash returned by the read preview that produced asset_handle.",
+      "REQUIRED when operation is edit. raw_hash returned by the api_read preview that produced asset_handle.",
     ),
     asset: z
       .record(z.string(), z.unknown())
@@ -791,7 +793,7 @@ export const DraftScaffoldFromAssetRequestSchema = z
   .object({
     ...AssetHandleField,
     expected_raw_hash: RawHashSchema.describe(
-      "REQUIRED: raw_hash returned by the read preview that produced asset_handle.",
+      "REQUIRED: raw_hash returned by the api_read preview that produced asset_handle.",
     ),
     clear_values: z
       .boolean()
@@ -1316,7 +1318,7 @@ export type CreateInput = z.infer<typeof CreateRequestSchema>;
 export const EditRequestSchema = z
   .object({
     asset: EditAssetInputSchema.describe(
-      "The asset payload to edit: one concrete asset envelope, with optional workflowConfiguration alongside it. Include `id` when available to identify the target asset. Parent-folder fields are ignored on edit — use move to relocate.",
+      "The asset payload to edit: one concrete asset envelope, with optional workflowConfiguration alongside it. Include `id` when available to identify the target asset. Parent-folder fields are ignored on edit — use api_move to relocate.",
     ),
   })
   .strict();
@@ -1340,14 +1342,14 @@ export const RemoveRequestSchema = z
   })
   .strict()
   .refine((v) => v.identifier.type !== "site", {
-    message: "Cascade sites cannot be removed with remove",
+    message: "Cascade sites cannot be removed with api_remove",
     path: ["identifier", "type"],
   })
   .refine(
     (v) =>
       v.identifier.type !== "folder" || v.identifier.path?.path !== "/",
     {
-      message: "Cascade site root folder path '/' requests cannot be removed with remove",
+      message: "Cascade site root folder path '/' requests cannot be removed with api_remove",
       path: ["identifier", "path", "path"],
     },
   );
@@ -1942,13 +1944,12 @@ export const EditPreferenceRequestSchema = z
 export type EditPreferenceInput = z.infer<typeof EditPreferenceRequestSchema>;
 
 /** -------------------------------------------------------------------------
- * 33. ReadResponseRequest — retrieve a slice of a cached oversize response.
+ * 33. LocalReadCachedResponseRequest — retrieve a cached response slice.
  *
- * This is the only MCP-native tool (no Cascade backend). Agents call it with
- * a handle produced by an oversize tool response to fetch additional
- * characters.
+ * This local tool does not call Cascade. Agents call it with a handle produced
+ * by an oversized tool response to fetch additional characters.
  * ------------------------------------------------------------------------ */
-export const ReadResponseRequestSchema = z
+export const LocalReadCachedResponseRequestSchema = z
   .object({
     handle: z
       .string()
@@ -1984,4 +1985,6 @@ export const ReadResponseRequestSchema = z
   })
   .strict();
 
-export type ReadResponseInput = z.infer<typeof ReadResponseRequestSchema>;
+export type LocalReadCachedResponseInput = z.infer<
+  typeof LocalReadCachedResponseRequestSchema
+>;

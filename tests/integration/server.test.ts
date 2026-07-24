@@ -7,7 +7,7 @@
  * and 4 local utilities). Also exercises one
  * end-to-end handler invocation (`read`) through the real
  * pipeline that `registerCascadeTool` installs on the server, plus
- * the oversize-response round-trip through `read_response`.
+ * the oversize-response round-trip through `local_read_cached_response`.
  */
 
 import { describe, test, expect, mock } from "bun:test";
@@ -259,7 +259,7 @@ function assetPropertyKeysFromTypes(): string[] {
 /** All 68 expected tool names: 25 direct Cascade API tools, 14 cached asset follow-up tools, 19 draft workflow tools, 6 browser API tools, and 4 local utilities. */
 const EXPECTED_TOOL_NAMES = [
   // crud and asset follow-ups (20)
-  "read",
+  "api_read",
   "asset_list_facts",
   "asset_search_values",
   "asset_search_keys",
@@ -274,11 +274,11 @@ const EXPECTED_TOOL_NAMES = [
   "file_data_read",
   "file_data_image",
   "file_data_export",
-  "create",
-  "edit",
-  "remove",
-  "move",
-  "copy",
+  "api_create",
+  "api_edit",
+  "api_remove",
+  "api_move",
+  "api_copy",
   // draft workflow (19)
   "local_draft_open",
   "local_draft_list_facts",
@@ -300,32 +300,32 @@ const EXPECTED_TOOL_NAMES = [
   "local_draft_validate",
   "local_draft_submit",
   // search (1)
-  "search",
+  "api_search",
   // sites (2)
-  "list_sites",
-  "site_copy",
+  "api_list_sites",
+  "api_site_copy",
   // access (2)
-  "read_access_rights",
-  "edit_access_rights",
+  "api_read_access_rights",
+  "api_edit_access_rights",
   // workflow (4)
-  "read_workflow_settings",
-  "edit_workflow_settings",
-  "read_workflow_information",
-  "perform_workflow_transition",
+  "api_read_workflow_settings",
+  "api_edit_workflow_settings",
+  "api_read_workflow_information",
+  "api_perform_workflow_transition",
   // messages (4)
-  "list_subscribers",
-  "list_messages",
-  "mark_message",
-  "delete_message",
+  "api_list_subscribers",
+  "api_list_messages",
+  "api_mark_message",
+  "api_delete_message",
   // checkout (2)
-  "check_out",
-  "check_in",
+  "api_check_out",
+  "api_check_in",
   // audits (3)
-  "read_audits",
-  "read_preferences",
-  "edit_preference",
+  "api_read_audits",
+  "api_read_preferences",
+  "api_edit_preference",
   // publish (1)
-  "publish_unpublish",
+  "api_publish_unpublish",
   // browser API (6)
   "browser_login",
   "browser_check_draft",
@@ -337,7 +337,7 @@ const EXPECTED_TOOL_NAMES = [
   "tool_blocks",
   "protect_site_removal",
   "server_version",
-  "read_response",
+  "local_read_cached_response",
 ];
 
 const READ_IMAGE_FILE = {
@@ -431,7 +431,7 @@ describe("createServer (server factory)", () => {
     const server = createServer(client, { toolBlockStore: emptyToolBlockStore() });
     const transport = await connectTestTransport(server);
 
-    const result = await callToolViaProtocol(transport, "read", {
+    const result = await callToolViaProtocol(transport, "api_read", {
       identifier: { id: "abc", type: "page" },
     });
 
@@ -458,7 +458,7 @@ describe("createServer (server factory)", () => {
     const server = createServer(client, { toolBlockStore: emptyToolBlockStore() });
     const transport = await connectTestTransport(server);
 
-    const readResult = await callToolViaProtocol(transport, "read", {
+    const readResult = await callToolViaProtocol(transport, "api_read", {
       identifier: { id: "file123", type: "file" },
     });
     const handle = (readResult.structuredContent as Record<string, any>).asset_handle;
@@ -477,7 +477,7 @@ describe("createServer (server factory)", () => {
     expect(imageResult.structuredContent).toBeUndefined();
   });
 
-  test("read with oversize response mints handle, read_response retrieves slices", async () => {
+  test("read with oversize response mints handle, local_read_cached_response retrieves slices", async () => {
     const client = createMockClient({
       read: mock(() => Promise.resolve(READ_PAGE_HUGE)),
     });
@@ -485,7 +485,7 @@ describe("createServer (server factory)", () => {
     const transport = await connectTestTransport(server);
 
     // Act 1: read with oversize result should mint a handle.
-    const oversize = await callToolViaProtocol(transport, "read", {
+    const oversize = await callToolViaProtocol(transport, "api_read", {
       identifier: { id: "huge-page-id", type: "page" },
       read_mode: "raw",
     });
@@ -496,7 +496,7 @@ describe("createServer (server factory)", () => {
     if (!firstBlock || firstBlock.type !== "text") {
       throw new Error("expected first content block to be text");
     }
-    expect(firstBlock.text).toContain("read_response");
+    expect(firstBlock.text).toContain("local_read_cached_response");
     expect(firstBlock.text).toMatch(/h_[a-z0-9-]+/i);
 
     const structured = oversize.structuredContent as Record<string, any>;
@@ -512,12 +512,16 @@ describe("createServer (server factory)", () => {
 
     const handle = envelope.handle;
 
-    // Act 2: read_response {handle, offset: 0, length: 100}.
-    const firstSlice = await callToolViaProtocol(transport, "read_response", {
-      handle,
-      offset: 0,
-      length: 100,
-    });
+    // Act 2: local_read_cached_response {handle, offset: 0, length: 100}.
+    const firstSlice = await callToolViaProtocol(
+      transport,
+      "local_read_cached_response",
+      {
+        handle,
+        offset: 0,
+        length: 100,
+      },
+    );
 
     expect(firstSlice.isError).not.toBe(true);
     const firstSliceStructured = firstSlice.structuredContent as Record<
@@ -537,12 +541,16 @@ describe("createServer (server factory)", () => {
     const firstSliceText = JSON.parse(firstSliceBlock.text);
     expect(firstSliceText.slice_text.length).toBe(100);
 
-    // Act 3: read_response {handle, offset: 100, length: 100}.
-    const secondSlice = await callToolViaProtocol(transport, "read_response", {
-      handle,
-      offset: 100,
-      length: 100,
-    });
+    // Act 3: local_read_cached_response {handle, offset: 100, length: 100}.
+    const secondSlice = await callToolViaProtocol(
+      transport,
+      "local_read_cached_response",
+      {
+        handle,
+        offset: 100,
+        length: 100,
+      },
+    );
 
     expect(secondSlice.isError).not.toBe(true);
     const secondSliceStructured = secondSlice.structuredContent as Record<
@@ -570,7 +578,7 @@ describe("createServer (server factory)", () => {
     const server = createServer(client, { toolBlockStore: emptyToolBlockStore() });
     const transport = await connectTestTransport(server);
 
-    const removedField = await callToolViaProtocol(transport, "read", {
+    const removedField = await callToolViaProtocol(transport, "api_read", {
       identifier: { id: "abc", type: "page" },
       response_format: "json",
     });
@@ -581,7 +589,7 @@ describe("createServer (server factory)", () => {
     expect(removedBody.error.issues[0].code).toBe("unrecognized_keys");
     expect(removedBody.error.issues[0].hint).toContain("response_format");
 
-    const invalidEnum = await callToolViaProtocol(transport, "read", {
+    const invalidEnum = await callToolViaProtocol(transport, "api_read", {
       identifier: { id: "abc", type: "page" },
       read_mode: "sk-testsecret123456",
     });
@@ -616,18 +624,18 @@ describe("createServer (server factory)", () => {
     const tools = Object.fromEntries(
       listResult.tools.map((tool: Record<string, any>) => [tool.name, tool]),
     );
-    const readSchema = tools["read"].inputSchema;
-    const createSchema = tools["create"].inputSchema;
-    const editSchema = tools["edit"].inputSchema;
-    const removeSchema = tools["remove"].inputSchema;
-    const moveSchema = tools["move"].inputSchema;
-    const copySchema = tools["copy"].inputSchema;
-    const accessSchema = tools["edit_access_rights"].inputSchema;
+    const readSchema = tools["api_read"].inputSchema;
+    const createSchema = tools["api_create"].inputSchema;
+    const editSchema = tools["api_edit"].inputSchema;
+    const removeSchema = tools["api_remove"].inputSchema;
+    const moveSchema = tools["api_move"].inputSchema;
+    const copySchema = tools["api_copy"].inputSchema;
+    const accessSchema = tools["api_edit_access_rights"].inputSchema;
     const workflowSettingsSchema =
-      tools["edit_workflow_settings"].inputSchema;
-    const publishSchema = tools["publish_unpublish"].inputSchema;
-    const searchSchema = tools["search"].inputSchema;
-    const siteCopySchema = tools["site_copy"].inputSchema;
+      tools["api_edit_workflow_settings"].inputSchema;
+    const publishSchema = tools["api_publish_unpublish"].inputSchema;
+    const searchSchema = tools["api_search"].inputSchema;
+    const siteCopySchema = tools["api_site_copy"].inputSchema;
     const nodeletSchema = tools["asset_get_nodelet"].inputSchema;
     const fileDataInfoSchema = tools["file_data_info"].inputSchema;
     const fileDataReadSchema = tools["file_data_read"].inputSchema;
@@ -639,10 +647,10 @@ describe("createServer (server factory)", () => {
       tools["local_draft_scaffold_create"].inputSchema;
     const draftSetFileDataSchema = tools["local_draft_set_file_data"].inputSchema;
     const draftSubmitSchema = tools["local_draft_submit"].inputSchema;
-    const transitionSchema = tools["perform_workflow_transition"].inputSchema;
-    const auditSchema = tools["read_audits"].inputSchema;
-    const preferenceSchema = tools["edit_preference"].inputSchema;
-    const markSchema = tools["mark_message"].inputSchema;
+    const transitionSchema = tools["api_perform_workflow_transition"].inputSchema;
+    const auditSchema = tools["api_read_audits"].inputSchema;
+    const preferenceSchema = tools["api_edit_preference"].inputSchema;
+    const markSchema = tools["api_mark_message"].inputSchema;
 
     expect(schemaTypes(readSchema.properties.identifier)).toContain("object");
     expect(schemaHasRequiredBranch(readSchema.properties.identifier, "id")).toBe(true);
@@ -684,10 +692,10 @@ describe("createServer (server factory)", () => {
     expect(schemaPathTypes(createSchema.properties.asset, ["file", "data"])).toEqual(["array"]);
     expect(schemaPathTypes(createSchema.properties.asset, ["file", "data", "[]"])).toEqual(["integer"]);
     expect(schemaPathTypes(editSchema.properties.asset, ["file", "data", "[]"])).toEqual(["integer"]);
-    expect(tools["create"].description).toContain(
+    expect(tools["api_create"].description).toContain(
       "asset.file.data` accepts signed Java bytes (-128..127) or unsigned file bytes (0..255)",
     );
-    expect(tools["edit"].description).toContain(
+    expect(tools["api_edit"].description).toContain(
       "asset.file.data` accepts signed Java bytes (-128..127) or unsigned file bytes (0..255)",
     );
     expect(schemaPathTypes(createSchema.properties.asset, ["destination", "publishIntervalHours"])).toEqual(["number"]);
@@ -838,7 +846,7 @@ describe("createServer (server factory)", () => {
     expect(markTypeSchema).toContain("unread");
     expect(markTypeSchema).not.toContain("archive");
 
-    const invalid = await callToolViaProtocol(transport, "read", {
+    const invalid = await callToolViaProtocol(transport, "api_read", {
       identifier: "{\"id\":\"abc\",\"type\":\"page\"}",
     });
     const body = JSON.parse((invalid.content[0] as any).text);
@@ -857,22 +865,22 @@ describe("createServer (server factory)", () => {
 
     const cases = [
       {
-        tool: "create",
+        tool: "api_create",
         method: client.create,
         args: { asset: JSON.stringify({ page: { name: "index" } }) },
       },
       {
-        tool: "edit",
+        tool: "api_edit",
         method: client.edit,
         args: { asset: JSON.stringify({ page: { id: "abc" } }) },
       },
       {
-        tool: "remove",
+        tool: "api_remove",
         method: client.remove,
         args: { identifier: JSON.stringify(identifier) },
       },
       {
-        tool: "move",
+        tool: "api_move",
         method: client.move,
         args: {
           identifier,
@@ -883,7 +891,7 @@ describe("createServer (server factory)", () => {
         },
       },
       {
-        tool: "copy",
+        tool: "api_copy",
         method: client.copy,
         args: {
           identifier,
@@ -894,7 +902,7 @@ describe("createServer (server factory)", () => {
         },
       },
       {
-        tool: "publish_unpublish",
+        tool: "api_publish_unpublish",
         method: client.publishUnpublish,
         args: {
           identifier,
@@ -902,7 +910,7 @@ describe("createServer (server factory)", () => {
         },
       },
       {
-        tool: "edit_access_rights",
+        tool: "api_edit_access_rights",
         method: client.editAccessRights,
         args: {
           identifier,
@@ -913,7 +921,7 @@ describe("createServer (server factory)", () => {
         },
       },
       {
-        tool: "edit_workflow_settings",
+        tool: "api_edit_workflow_settings",
         method: client.editWorkflowSettings,
         args: {
           identifier: { id: "folder-1", type: "folder" },
@@ -925,7 +933,7 @@ describe("createServer (server factory)", () => {
         },
       },
       {
-        tool: "perform_workflow_transition",
+        tool: "api_perform_workflow_transition",
         method: client.performWorkflowTransition,
         args: {
           workflowTransitionInformation: JSON.stringify({
@@ -985,12 +993,12 @@ describe("createServer (server factory)", () => {
 
     const cases = [
       {
-        tool: "search",
+        tool: "api_search",
         method: client.search,
         args: { searchInformation: { searchTerms: "x" }, limit: "50" },
       },
       {
-        tool: "search",
+        tool: "api_search",
         method: client.search,
         args: { searchInformation: { searchTerms: "x" }, offset: "0" },
       },
@@ -1003,7 +1011,7 @@ describe("createServer (server factory)", () => {
         args: { asset_handle: "a_abc", pointer: "", include_text: "false" },
       },
       {
-        tool: "remove",
+        tool: "api_remove",
         method: client.remove,
         args: {
           identifier: { id: "abc", type: "page" },
@@ -1011,7 +1019,7 @@ describe("createServer (server factory)", () => {
         },
       },
       {
-        tool: "move",
+        tool: "api_move",
         method: client.move,
         args: {
           identifier: { id: "abc", type: "page" },
@@ -1022,7 +1030,7 @@ describe("createServer (server factory)", () => {
         },
       },
       {
-        tool: "copy",
+        tool: "api_copy",
         method: client.copy,
         args: {
           identifier: { id: "abc", type: "page" },
@@ -1034,7 +1042,7 @@ describe("createServer (server factory)", () => {
         },
       },
       {
-        tool: "publish_unpublish",
+        tool: "api_publish_unpublish",
         method: client.publishUnpublish,
         args: {
           identifier: { id: "abc", type: "page" },
@@ -1042,7 +1050,7 @@ describe("createServer (server factory)", () => {
         },
       },
       {
-        tool: "edit_workflow_settings",
+        tool: "api_edit_workflow_settings",
         method: client.editWorkflowSettings,
         args: {
           identifier: { id: "folder-1", type: "folder" },
@@ -1050,7 +1058,7 @@ describe("createServer (server factory)", () => {
         },
       },
       {
-        tool: "edit_access_rights",
+        tool: "api_edit_access_rights",
         method: client.editAccessRights,
         args: {
           identifier: { id: "abc", type: "page" },
@@ -1090,7 +1098,7 @@ describe("createServer (server factory)", () => {
         },
       },
     ]) {
-      const result = await callToolViaProtocol(transport, "remove", args);
+      const result = await callToolViaProtocol(transport, "api_remove", args);
       const body = JSON.parse((result.content[0] as any).text);
 
       expect(result.isError).toBe(true);
@@ -1107,7 +1115,7 @@ describe("createServer (server factory)", () => {
     const server = createServer(client, { toolBlockStore: emptyToolBlockStore() });
     const transport = await connectTestTransport(server);
 
-    const result = await callToolViaProtocol(transport, "read", {
+    const result = await callToolViaProtocol(transport, "api_read", {
       identifier: { id: "huge-page-id", type: "page" },
     });
 
@@ -1149,7 +1157,7 @@ describe("createServer (server factory)", () => {
     });
     const transport = await connectTestTransport(server);
 
-    const readResult = await callToolViaProtocol(transport, "read", {
+    const readResult = await callToolViaProtocol(transport, "api_read", {
       identifier: { id: "page-001", type: "page" },
     });
     const readBody = readResult.structuredContent as Record<string, any>;

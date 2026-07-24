@@ -118,8 +118,8 @@ export function translateError(err: unknown, opName: string): CallToolResult {
 function suggestedRecovery(message: string): Record<string, unknown> {
   if (/asset handle .* not found/i.test(message)) {
     return {
-      suggested_tool: "read",
-      hints: ["Re-run read to create a fresh asset_handle."],
+      suggested_tool: "api_read",
+      hints: ["Re-run api_read to create a fresh asset_handle."],
     };
   }
   if (/Browser API login is not configured/i.test(message)) {

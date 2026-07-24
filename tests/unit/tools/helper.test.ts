@@ -303,7 +303,7 @@ describe("registerCascadeTool", () => {
     const sc = result.structuredContent as Record<string, any>;
 
     expect(sc._cache.handle.startsWith("h_")).toBe(true);
-    expect(sc._cache.tool).toBe("read_response");
+    expect(sc._cache.tool).toBe("local_read_cached_response");
     expect(cache.size()).toBe(1);
   });
 });

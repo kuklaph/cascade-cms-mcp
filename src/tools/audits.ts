@@ -1,9 +1,9 @@
 /**
  * Audit and preference tools: 3 administrative operations.
  *
- *   read_audits      — query audit log entries
- *   read_preferences — fetch all Cascade system preferences
- *   edit_preference  — update a single system preference
+ *   api_read_audits      — query audit log entries
+ *   api_read_preferences — fetch all Cascade system preferences
+ *   api_edit_preference  — update a single system preference
  *
  * Each tool is a thin `registerCascadeTool` call delegating to the
  * matching `CascadeClient` method.
@@ -30,7 +30,7 @@ export function registerAuditTools(
   deps?: CascadeDeps,
 ): void {
   registerCascadeTool(server, {
-    name: "read_audits",
+    name: "api_read_audits",
     title: "Read Audit Log",
     description: buildCascadeToolDescription(
       `Read Cascade audit log entries matching the specified filters.
@@ -68,8 +68,8 @@ Returns:
 Examples:
   - Use when: "Who edited /about today?" -> { auditParameters: { identifier: { type: "folder", path: { path: "/about", siteName: "www" } }, auditType: "edit", startDate: "2026-04-13T00:00:00Z" } }
   - Use when: "All logins in April 2026" -> { auditParameters: { auditType: "login", startDate: "2026-04-01T00:00:00Z", endDate: "2026-04-30T23:59:59Z" } }
-  - Don't use when: You want the current state — use read.
-  - Don't use when: You want user inbox messages — use list_messages.
+  - Don't use when: You want the current state — use api_read.
+  - Don't use when: You want user inbox messages — use api_list_messages.
 
 Pagination:
   - Default limit of 50 works for most queries. Increase up to 500 for larger pages.
@@ -96,12 +96,12 @@ Error Handling:
   }, deps);
 
   registerCascadeTool(server, {
-    name: "read_preferences",
+    name: "api_read_preferences",
     title: "Read System Preferences",
     description: buildCascadeToolDescription(
       `Read all Cascade system preferences.
 
-Returns every configurable server-wide preference as name/value pairs. Preferences include things like default publish behavior, image handling defaults, API limits, and UI options. Typically useful before calling edit_preference so you know the current value. Requires system-admin-level credentials.
+Returns every configurable server-wide preference as name/value pairs. Preferences include things like default publish behavior, image handling defaults, API limits, and UI options. Typically useful before calling api_edit_preference so you know the current value. Requires system-admin-level credentials.
 
 Args:
   (none)
@@ -135,12 +135,12 @@ Error Handling:
   }, deps);
 
   registerCascadeTool(server, {
-    name: "edit_preference",
+    name: "api_edit_preference",
     title: "Edit System Preference",
     description: buildCascadeToolDescription(
       `Update a single Cascade system preference.
 
-Accepts a generated Preference object with name and value strings. The name must exactly match an existing preference key (see read_preferences for the full list). Changes take effect server-wide immediately. Requires system-admin-level credentials.
+Accepts a generated Preference object with name and value strings. The name must exactly match an existing preference key (see api_read_preferences for the full list). Changes take effect server-wide immediately. Requires system-admin-level credentials.
 
 Args:
   - preference (object, required): The preference to update
@@ -155,7 +155,7 @@ Returns:
 Examples:
   - Use when: "Update a text-valued server preference" -> { preference: { name: "some.preference.key", value: "some-string-value" } }
   - Use when: "Replace a configured preference value after reading the current key" -> { preference: { name: "some.preference.key", value: "new-string-value" } }
-  - Don't use when: You want to read current values — use read_preferences first.
+  - Don't use when: You want to read current values — use api_read_preferences first.
   - Don't use when: The target is user-scoped — system preferences are server-wide.
 
 Error Handling:

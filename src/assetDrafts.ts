@@ -150,7 +150,7 @@ export function createDraftCache(opts?: DraftCacheOptions): DraftCache {
   ): DraftCacheEntry {
     if (readEntry.rawHash !== expectedRawHash) {
       throw new Error(
-        `expected_raw_hash mismatch for asset handle ${readEntry.handle}. Re-run read or use the current raw_hash.`,
+        `expected_raw_hash mismatch for asset handle ${readEntry.handle}. Re-run api_read or use the current raw_hash.`,
       );
     }
     const readRoot = asRecord(readEntry.raw);
@@ -609,7 +609,7 @@ function assertDraftSize(value: unknown, maxBytes: number): void {
   const serialized = JSON.stringify(value) ?? "undefined";
   if (serialized.length > maxBytes) {
     throw new Error(
-      `Draft payload is too large to cache safely (${serialized.length} bytes, max ${maxBytes}). Use direct create/edit for large payloads or reduce the draft size.`,
+      `Draft payload is too large to cache safely (${serialized.length} bytes, max ${maxBytes}). Use direct api_create/api_edit for large payloads or reduce the draft size.`,
     );
   }
 }

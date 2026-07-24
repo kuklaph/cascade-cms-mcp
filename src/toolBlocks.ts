@@ -6,6 +6,34 @@ import { EntityTypeSchema } from "./schemas/common.js";
 
 type EntityType = z.infer<typeof EntityTypeSchema>;
 
+const DIRECT_REST_TOOL_NAMES = new Set([
+  "read",
+  "create",
+  "edit",
+  "remove",
+  "move",
+  "copy",
+  "search",
+  "list_sites",
+  "site_copy",
+  "read_access_rights",
+  "edit_access_rights",
+  "read_workflow_settings",
+  "edit_workflow_settings",
+  "read_workflow_information",
+  "perform_workflow_transition",
+  "list_subscribers",
+  "list_messages",
+  "mark_message",
+  "delete_message",
+  "check_out",
+  "check_in",
+  "read_audits",
+  "read_preferences",
+  "edit_preference",
+  "publish_unpublish",
+]);
+
 const SelectorSchema = z.union([
   z.string().min(1),
   z.array(z.string().min(1)).min(1),
@@ -123,7 +151,7 @@ export function findDeniedToolCall(
 export function shouldCheckToolBlocks(tool: string): boolean {
   return (
     tool !== "tool_blocks" &&
-    tool !== "read_response" &&
+    tool !== "local_read_cached_response" &&
     !tool.startsWith("asset_")
   );
 }
@@ -428,7 +456,10 @@ function selectors(value: string | string[]): string[] {
 }
 
 function ruleToolsInclude(rule: ToolBlockRule, tool: string): boolean {
-  return rule.tools.some((candidate) => normalizeToolName(candidate) === tool);
+  const normalizedTool = normalizeToolName(tool);
+  return rule.tools.some(
+    (candidate) => normalizeToolName(candidate) === normalizedTool,
+  );
 }
 
 function normalizeToolName(tool: string): string {
@@ -436,9 +467,9 @@ function normalizeToolName(tool: string): string {
     return `local_draft_${tool.slice("cascade_draft_".length)}`;
   }
   if (tool.startsWith("cascade_")) {
-    return tool.slice("cascade_".length);
+    return normalizeToolName(tool.slice("cascade_".length));
   }
-  return tool;
+  return DIRECT_REST_TOOL_NAMES.has(tool) ? `api_${tool}` : tool;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

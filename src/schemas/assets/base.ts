@@ -44,7 +44,7 @@ export const NamedAssetFields = {
   name: z
     .string()
     .describe(
-      "Asset name. REQUIRED on create; ignored on edit — use the move operation to rename.",
+      "Asset name. REQUIRED on api_create; ignored on api_edit — use api_move to rename.",
     ),
 };
 
@@ -56,12 +56,12 @@ export const FolderContainedAssetFields = {
     .string()
     .optional()
     .describe(
-      "Parent folder id. REQUIRED on create (use this or parentFolderPath); ignored on edit. Use move to relocate. Priority: parentFolderId > parentFolderPath.",
+      "Parent folder id. REQUIRED for api_create (use this or parentFolderPath); ignored by api_edit. Use api_move to relocate. Priority: parentFolderId > parentFolderPath.",
     ),
   parentFolderPath: z
     .string()
     .optional()
-    .describe("Parent folder path. REQUIRED on create if id is not provided; ignored on edit. See move to relocate."),
+    .describe("Parent folder path. REQUIRED on api_create if id is not provided; ignored on api_edit. See api_move to relocate."),
   path: z
     .string()
     .optional()
@@ -151,12 +151,12 @@ export const ContaineredAssetFields = {
     .string()
     .optional()
     .describe(
-      "Parent container id. REQUIRED on create; ignored on edit. Priority: parentContainerId > parentContainerPath. Use move to relocate existing assets.",
+      "Parent container id. REQUIRED for api_create; ignored by api_edit. Priority: parentContainerId > parentContainerPath. Use api_move to relocate existing assets.",
     ),
   parentContainerPath: z
     .string()
     .optional()
-    .describe("Parent container path (alt). REQUIRED on create if id not provided; ignored on edit. Use move to relocate existing assets."),
+    .describe("Parent container path (alt). REQUIRED for api_create if id not provided; ignored by api_edit. Use api_move to relocate existing assets."),
   path: z
     .string()
     .optional()

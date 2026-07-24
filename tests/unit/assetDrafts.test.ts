@@ -140,7 +140,7 @@ describe("asset draft cache", () => {
           { op: "replace", path: "/asset/page/name", value: "x".repeat(100) },
         ],
       }),
-    ).toThrow("too large");
+    ).toThrow("Use direct api_create/api_edit");
 
     const current = draftCache.get(draft.handle)!;
     expect(current.revision).toBe(1);

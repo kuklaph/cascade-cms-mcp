@@ -3,7 +3,7 @@
  *
  * When a tool's rendered text exceeds the MCP content limit, the full
  * rendered payload is stored here under a handle. The matching companion
- * tool (`read_response`) retrieves slices by handle.
+ * tool (`local_read_cached_response`) retrieves slices by handle.
  *
  * Design: closure over `Map<string, CachedEntry>` — insertion order is
  * LRU order. `get` refreshes recency by re-inserting the entry.

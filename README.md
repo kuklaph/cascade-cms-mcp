@@ -175,7 +175,7 @@ Browser session operations run one at a time per MCP session so login, site sele
 3. Open Manage Site.
 4. Copy the site ID from the browser URL into `CASCADE_BROWSER_SITE_ID`.
 
-If `CASCADE_API_KEY` and `CASCADE_URL` are already configured, you can ask your MCP agent to list Cascade sites. The agent can call the `list_sites` tool and use the production site's ID from that response. This depends on the API user's permissions and may not show the intended production site.
+If `CASCADE_API_KEY` and `CASCADE_URL` are already configured, you can ask your MCP agent to list Cascade sites. The agent can call `api_list_sites` and use the production site's ID from that response. This depends on the API user's permissions and may not show the intended production site.
 
 When all three browser values are present, startup attempts browser login and caches the session. If startup login fails, the MCP server still starts and standard API tools remain available. Without `CASCADE_BROWSER_SITE_ID`, call `browser_login` with `site_id` before other browser-backed tools in the same MCP session.
 
@@ -214,9 +214,9 @@ These sections are mainly for agents and users configuring MCP approvals. They c
 
 Most tool responses put JSON text in `content[0]`. When present, `structuredContent` is the authoritative machine-readable result.
 
-Oversized responses return bounded `_cache` metadata. Use `read_response` with that handle to page through the full serialized response. `characters_total`, `characters_returned`, and offsets use JavaScript UTF-16 code units. `bytes_total` and `bytes_returned` remain as deprecated compatibility aliases and are not byte counts. Handles are process-scoped and may be evicted after later calls.
+Oversized responses return bounded `_cache` metadata. Use `local_read_cached_response` with that handle to page through the full serialized response. `characters_total`, `characters_returned`, and offsets use JavaScript UTF-16 code units. `bytes_total` and `bytes_returned` remain as deprecated compatibility aliases and are not byte counts. Handles are process-scoped and may be evicted after later calls.
 
-`read` returns a compact preview plus an `asset_handle` by default. Use `read_mode: "raw"` only when you need the full Cascade payload immediately. Follow-up tools inspect cached data and do not call Cascade again.
+`api_read` returns a compact preview plus an `asset_handle` by default. Use `read_mode: "raw"` only when you need the full Cascade payload immediately. Follow-up tools inspect cached data and do not call Cascade again.
 
 `file_data_image` returns image-only MCP content. Call `file_data_info` separately for JSON metadata.
 
@@ -226,20 +226,22 @@ Use these groups when configuring MCP client approvals. Client config syntax var
 
 "Read-only" means the tool does not persist a change. It may still call Cascade unless the group says it is local-only.
 
+Direct Cascade REST tools use the `api_` prefix. Browser-backed, cached-asset, file-data, draft, and local utility tools keep their distinct namespaces.
+
 Cascade API read-only tools:
 
 | Tool                        | Purpose                                            |
 | --------------------------- | -------------------------------------------------- |
-| `read`                      | Read an asset and return a preview or raw response |
-| `search`                    | Search Cascade assets                              |
-| `list_sites`                | List Cascade sites                                 |
-| `read_access_rights`        | Read access rights for an asset                    |
-| `read_workflow_settings`    | Read workflow settings for a folder                |
-| `read_workflow_information` | Read workflow information for an asset             |
-| `list_subscribers`          | List subscribers for an asset                      |
-| `list_messages`             | List Cascade messages                              |
-| `read_audits`               | Read audit log entries                             |
-| `read_preferences`          | Read system preferences                            |
+| `api_read`                      | Read an asset and return a preview or raw response |
+| `api_search`                    | Search Cascade assets                              |
+| `api_list_sites`                | List Cascade sites                                 |
+| `api_read_access_rights`        | Read access rights for an asset                    |
+| `api_read_workflow_settings`    | Read workflow settings for a folder                |
+| `api_read_workflow_information` | Read workflow information for an asset             |
+| `api_list_subscribers`          | List subscribers for an asset                      |
+| `api_list_messages`             | List Cascade messages                              |
+| `api_read_audits`               | Read audit log entries                             |
+| `api_read_preferences`          | Read system preferences                            |
 
 Browser-backed read-only tools:
 
@@ -257,7 +259,7 @@ These tools do not call Cascade directly. They inspect in-memory handles created
 | Tool                          | Purpose                                                            |
 | ----------------------------- | ------------------------------------------------------------------ |
 | `server_version`               | Read this MCP server's name and version                            |
-| `read_response`                | Fetch more text from a cached oversized response                   |
+| `local_read_cached_response`   | Fetch more text from a cached oversized response                   |
 | `asset_list_facts`             | List indexed raw JSON facts from a cached read                     |
 | `asset_search_values`          | Search scalar values in a cached read                              |
 | `asset_search_keys`            | Search object keys in a cached read                                |
@@ -275,7 +277,7 @@ Read-only cached-asset JSON Pointer and pointer-prefix fields reject the reserve
 
 File data tools:
 
-Use these for Cascade `file` assets whose binary content is stored in `file.data`. Each tool accepts an `asset_handle` from `read` or a direct file `identifier`. With an `asset_handle`, the tool uses the local cache. With an `identifier`, it reads the file from Cascade first and caches it.
+Use these for Cascade `file` assets whose binary content is stored in `file.data`. Each tool accepts an `asset_handle` from `api_read` or a direct file `identifier`. With an `asset_handle`, the tool uses the local cache. With an `identifier`, it reads the file from Cascade first and caches it.
 
 | Tool               | Purpose                                                                 |
 | ------------------ | ----------------------------------------------------------------------- |
@@ -284,11 +286,11 @@ Use these for Cascade `file` assets whose binary content is stored in `file.data
 | `file_data_image`  | Return magic-byte verified image files as image-only MCP content        |
 | `file_data_export` | Write exact bytes to an explicit local `output_path`                    |
 
-`create`, `edit`, and `local_draft_submit` accept `file.data` as signed Java bytes (`-128..127`) or unsigned file bytes (`0..255`) and send Cascade signed bytes. `file_data_export` writes to an explicit local path, refuses overwrites unless `overwrite: true`, and can verify `expected_sha256`.
+`api_create`, `api_edit`, and `local_draft_submit` accept `file.data` as signed Java bytes (`-128..127`) or unsigned file bytes (`0..255`) and send Cascade signed bytes. `file_data_export` writes to an explicit local path, refuses overwrites unless `overwrite: true`, and can verify `expected_sha256`.
 
 Local draft workflow tools:
 
-Drafts are mutable, in-memory payloads for `create` or `edit`. Local draft tools do not change Cascade until `local_draft_submit`.
+Drafts are mutable, in-memory payloads for `api_create` or `api_edit`. Local draft tools do not change Cascade until `local_draft_submit`.
 
 - Edit drafts start from a cached `asset_handle`; create drafts start from an asset envelope or scaffold.
 - Patch tools mutate only the local draft addressed by `draft_handle`.
@@ -334,19 +336,19 @@ Approval recommended for Cascade or browser-admin changes:
 
 | Tool                          | State change                                                        |
 | ----------------------------- | ------------------------------------------------------------------- |
-| `create`                      | Creates an asset                                                    |
-| `edit`                        | Edits an asset                                                      |
+| `api_create`                  | Creates an asset                                                    |
+| `api_edit`                    | Edits an asset                                                      |
 | `local_draft_submit`          | Creates or edits an asset from the complete validated draft payload |
-| `move`                        | Moves or renames an asset                                           |
-| `copy`                        | Copies an asset                                                     |
-| `site_copy`                   | Copies a site                                                       |
-| `edit_access_rights`          | Changes asset access rights                                         |
-| `edit_workflow_settings`      | Changes workflow settings                                           |
-| `perform_workflow_transition` | Performs a workflow transition                                      |
-| `mark_message`                | Marks a message                                                     |
-| `check_out`                   | Checks out an asset                                                 |
-| `check_in`                    | Checks in an asset                                                  |
-| `edit_preference`             | Changes a system preference                                         |
+| `api_move`                    | Moves or renames an asset                                           |
+| `api_copy`                    | Copies an asset                                                     |
+| `api_site_copy`               | Copies a site                                                       |
+| `api_edit_access_rights`      | Changes asset access rights                                         |
+| `api_edit_workflow_settings`  | Changes workflow settings                                           |
+| `api_perform_workflow_transition` | Performs a workflow transition                                  |
+| `api_mark_message`            | Marks a message                                                     |
+| `api_check_out`               | Checks out an asset                                                 |
+| `api_check_in`                | Checks in an asset                                                  |
+| `api_edit_preference`         | Changes a system preference                                         |
 | `browser_create_snippet`      | Creates a browser-admin snippet                                     |
 | `browser_update_snippet`      | Updates a browser-admin snippet by ID                               |
 | `browser_delete_snippets`     | Deletes one or more browser-admin snippets by ID                    |
@@ -355,9 +357,9 @@ High-impact approval recommended:
 
 | Tool                        | State change                      |
 | --------------------------- | --------------------------------- |
-| `remove`            | Deletes an asset, except sites and root-folder path `/` requests |
-| `delete_message`    | Deletes a message                 |
-| `publish_unpublish` | Publishes or unpublishes an asset |
+| `api_remove`            | Deletes an asset, except sites and root-folder path `/` requests |
+| `api_delete_message`    | Deletes a message                 |
+| `api_publish_unpublish` | Publishes or unpublishes an asset |
 
 ### Workflow Examples
 
@@ -365,7 +367,7 @@ Read a page by id:
 
 ```json
 {
-  "tool": "read",
+  "tool": "api_read",
   "arguments": {
     "identifier": {
       "id": "d3631e59ac1easd2434bd70be3fbfe8148abc",
@@ -379,7 +381,7 @@ Read a folder by path:
 
 ```json
 {
-  "tool": "read",
+  "tool": "api_read",
   "arguments": {
     "identifier": {
       "path": { "path": "/about/team", "siteName": "www" },
@@ -401,7 +403,7 @@ Inspect cached read data after a preview:
 }
 ```
 
-Use the `asset_handle` returned by `read`; `asset_*` tools are follow-ups, not first-step reads.
+Use the `asset_handle` returned by `api_read`; `asset_*` tools are follow-ups, not first-step reads.
 
 Edit from a cached read without reconstructing the full payload in chat:
 
@@ -457,7 +459,9 @@ Edit from a cached read without reconstructing the full payload in chat:
 }
 ```
 
-Rules meant to block submitted drafts may target `local_draft_submit`. Use `create` or `edit` when the same rule should also block direct calls and matching local draft workflows before local draft work continues. For `create`, path rules match the intended parent path plus asset name once both are known.
+Rules meant to block submitted drafts may target `local_draft_submit`. Use `api_create` or `api_edit` when the same rule should also block direct calls and matching local draft workflows before local draft work continues. For `api_create`, path rules match the intended parent path plus asset name once both are known.
+
+New rules should use current tool names. Existing unprefixed and `cascade_*` direct REST names remain compatible during rule matching.
 
 Scaffold a create draft when starting from an asset type instead of a read:
 
@@ -471,7 +475,7 @@ Scaffold a create draft when starting from an asset type instead of a read:
 }
 ```
 
-The response includes the draft handle, scaffolded asset envelope, and required placeholders to patch before validation or submit. To scaffold from a cached asset, use `local_draft_scaffold_from_asset` with the `asset_handle` and `raw_hash` from `read`.
+The response includes the draft handle, scaffolded asset envelope, and required placeholders to patch before validation or submit. To scaffold from a cached asset, use `local_draft_scaffold_from_asset` with the `asset_handle` and `raw_hash` from `api_read`.
 
 Set binary file data on a file draft before submit:
 
@@ -492,7 +496,7 @@ Search for pages:
 
 ```json
 {
-  "tool": "search",
+  "tool": "api_search",
   "arguments": {
     "searchInformation": {
       "searchTerms": "admissions",
@@ -523,7 +527,7 @@ Use `protect_site_removal` to generate remove and move safeguards for accessible
     "action": "add",
     "rule": {
       "url": "https://college.cascadecms.com/entity/open.act?id=block-1&type=block",
-      "tools": ["remove", "edit"],
+      "tools": ["api_remove", "api_edit"],
       "reason": "Protected block"
     }
   }
@@ -537,17 +541,17 @@ Use `protect_site_removal` to generate remove and move safeguards for accessible
 | `cascade://entity-types`       |  Static  | Cascade entity type strings with short descriptions       |
 | `cascade://sites`              | Dynamic  | Live `listSites()` result                                 |
 | `cascade://text-encoding`      |  Static  | Text, rich text, XML, format, and template encoding rules |
-| `cascade://asset/{handle}/raw` | Template | Exact raw JSON cached from a prior `read` preview |
+| `cascade://asset/{handle}/raw` | Template | Exact raw JSON cached from a prior `api_read` preview |
 | `cascade://draft/{handle}/raw` | Template | Exact draft JSON unless blocked by draft read tool-block rules, the tool-block repository cannot be read, or the handle is invalid/missing |
 
 ## Troubleshooting
 
 - If tools appear unavailable, verify the MCP client can start the server and that `CASCADE_API_KEY` and `CASCADE_URL` are set in the environment used by that client.
 - If a cached handle is missing, rerun the originating tool. Handles are in-memory and process-scoped.
-- If `local_draft_open` reports an `expected_raw_hash` mismatch, rerun `read` and use the current `raw_hash`.
-- If `local_draft_submit` reports that the source asset changed, rerun `read` and open a fresh draft.
+- If `local_draft_open` reports an `expected_raw_hash` mismatch, rerun `api_read` and use the current `raw_hash`.
+- If `local_draft_submit` reports that the source asset changed, rerun `api_read` and open a fresh draft.
 - If a draft patch or submit reports an `expected_revision` mismatch, inspect the draft and retry with the current revision.
-- If a rendered response is truncated, call `read_response` with the returned handle, offset, and length.
+- If a rendered response is truncated, call `local_read_cached_response` with the returned handle, offset, and length.
 - Most MCP clients write server stderr to client logs. This server keeps stdout reserved for MCP JSON-RPC.
 
 ## Security Notes

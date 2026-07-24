@@ -180,6 +180,9 @@ describe("RemoveRequestSchema", () => {
       identifier: { id: "site-1", type: "site" },
     });
     expect(res.success).toBe(false);
+    if (!res.success) {
+      expect(res.error.issues[0]?.message).toContain("api_remove");
+    }
   });
 
   test("should reject root folder path removal requests", () => {
@@ -190,6 +193,9 @@ describe("RemoveRequestSchema", () => {
       },
     });
     expect(res.success).toBe(false);
+    if (!res.success) {
+      expect(res.error.issues[0]?.message).toContain("api_remove");
+    }
   });
 
   test("should reject root folder path removal requests with siteId", () => {
@@ -1274,6 +1280,12 @@ describe("draft workflow request schemas", () => {
   const ASSET_HANDLE = "a_00000000-0000-0000-0000-000000000000";
   const DRAFT_HANDLE = "d_00000000-0000-0000-0000-000000000000";
   const RAW_HASH = "0".repeat(64);
+
+  test("open describes the accepted operation values", () => {
+    expect(DraftOpenRequestSchema.shape.operation.description).toBe(
+      'REQUIRED: Use "edit" to clone an asset_handle, or "create" to start a create draft.',
+    );
+  });
 
   test("open accepts edit from asset_handle with raw hash", () => {
     const res = DraftOpenRequestSchema.safeParse({

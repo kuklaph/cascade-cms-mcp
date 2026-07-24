@@ -31,7 +31,9 @@ import {
   registerSiteRemovalProtectionTool,
   registerToolBlockTool,
 } from "./tools/toolBlocks.js";
-import { registerReadResponseTool } from "./tools/readResponse.js";
+import {
+  registerLocalReadCachedResponseTool,
+} from "./tools/localReadCachedResponse.js";
 import { registerServerVersionTool } from "./tools/version.js";
 import { registerCascadeResources } from "./resources.js";
 
@@ -44,7 +46,7 @@ import { registerCascadeResources } from "./resources.js";
  * @param client - The Cascade API client.
  * @param deps   - Optional shared dependencies. When omitted, a fresh in-memory
  *                 response cache is built so oversize tool results can mint
- *                 handles consumable by `read_response`.
+ *                 handles consumable by `local_read_cached_response`.
  */
 export function createServer(
   client: CascadeClient,
@@ -85,7 +87,7 @@ export function createServer(
   registerToolBlockTool(server, resolved);
   registerSiteRemovalProtectionTool(server, client, resolved);
   registerServerVersionTool(server);
-  registerReadResponseTool(server, resolved);
+  registerLocalReadCachedResponseTool(server, resolved);
 
   return server;
 }

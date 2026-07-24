@@ -85,7 +85,7 @@ describe("formatResponse", () => {
     expect(textPayload.characters_returned).toBe(textPayload.bytes_returned);
     expect(firstText(out).length).toBeLessThanOrEqual(CHARACTER_LIMIT);
     expect(textPayload.handle).toEqual(envelope.handle);
-    expect(textPayload.tool).toBe("read_response");
+    expect(textPayload.tool).toBe("local_read_cached_response");
     expect(envelope.bytes_total).toBe(cache.get(envelope.handle as string)!.fullText.length);
     expect(envelope.characters_total).toBe(envelope.bytes_total);
     expect(structured.success).toBe(true);
@@ -97,7 +97,7 @@ describe("formatResponse", () => {
     const cache = createResponseCache();
     const big = { success: true, text: '"\\\n'.repeat(30000) };
 
-    const out = formatResponse(big, "read_response", { cache });
+    const out = formatResponse(big, "local_read_cached_response", { cache });
     const textPayload = parsedText(out) as Record<string, unknown>;
 
     expect(firstText(out).length).toBeLessThanOrEqual(CHARACTER_LIMIT);

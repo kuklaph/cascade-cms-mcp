@@ -4,6 +4,15 @@ All notable changes to `cascade-cms-mcp-server` will be documented here.
 
 ## Unreleased
 
+### Breaking Changes
+
+- Renamed the local cached-response reader from `read_response` to `local_read_cached_response`.
+- Prefixed all 25 direct Cascade REST tools with `api_`; for example, `read`, `edit`, and `list_sites` are now `api_read`, `api_edit`, and `api_list_sites`.
+
+### Changed
+
+- Existing unprefixed and `cascade_*` tool-block rules continue matching renamed `api_*` tools. Generated site protections now store `api_remove` and `api_move`.
+
 ## 2.1.0 - 2026-07-23
 
 ### Added

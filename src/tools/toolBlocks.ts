@@ -22,7 +22,7 @@ const SITE_REMOVAL_SOURCE = "protect_site_removal:site";
 const ROOT_FOLDER_REMOVAL_SOURCE = "protect_site_removal:root-folder";
 const LEGACY_SITE_REMOVAL_SOURCE = "cascade_protect_site_removal:site";
 const LEGACY_ROOT_FOLDER_REMOVAL_SOURCE = "cascade_protect_site_removal:root-folder";
-const SITE_PROTECTION_TOOLS = ["remove", "move"];
+const SITE_PROTECTION_TOOLS = ["api_remove", "api_move"];
 
 const ToolBlocksRequestSchema = z
   .object({
@@ -52,7 +52,7 @@ export function registerToolBlockTool(
         `List or add blocked MCP tool-call rules stored in the local JSON repository.
 
 Use this tool when an agent should persist a guardrail that prevents selected tools from running against matching asset payloads. Rules require:
-  - tools: exact MCP tool names to block, such as remove or edit.
+  - tools: exact MCP tool names to block, such as api_remove or api_edit.
   - url: one or more https Cascade CMS asset URLs at /entity/open.act. Each URL must include id and type.
   - type plus id/path for explicit selectors. URL selectors and explicit selectors may be combined.
 
@@ -88,7 +88,7 @@ export function registerSiteRemovalProtectionTool(
       description: buildCascadeToolDescription(
         `Persist generated blocked-call rules that prevent removal or movement of accessible Cascade sites and their root folders.
 
-The tool lists accessible sites, blocks remove and move by site id and site name/path, then tries to read each site's root folder at "/". Readable root folders are blocked by id, and path "/" is always included to block path-based root-folder removal or movement. Existing generated rules from this tool are replaced instead of duplicated; unrelated rules are preserved.
+The tool lists accessible sites, blocks api_remove and api_move by site id and site name/path, then tries to read each site's root folder at "/". Readable root folders are blocked by id, and path "/" is always included to block path-based root-folder removal or movement. Existing generated rules from this tool are replaced instead of duplicated; unrelated rules are preserved.
 
 Returns a report with protected site count, protected root-folder id count, unreadable root folders, the block-store path, and final rule count.`,
       ),

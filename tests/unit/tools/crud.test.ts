@@ -101,10 +101,10 @@ function assetPropertyKeysFromTypes(): string[] {
 }
 
 // =============================================================================
-// read
+// api_read
 // =============================================================================
 
-describe("read tool", () => {
+describe("api_read tool", () => {
   test("preview default: calls client.read and returns compact handle-based preview", async () => {
     const { server, tools } = makeMockServer();
     const client = createMockClient({
@@ -113,7 +113,7 @@ describe("read tool", () => {
 
     registerCrudTools(server as any, client);
 
-    const tool = findTool(tools, "read");
+    const tool = findTool(tools, "api_read");
     expect(tool.config.annotations.readOnlyHint).toBe(true);
 
     const result = await tool.handler({
@@ -158,13 +158,13 @@ describe("read tool", () => {
     });
 
     registerCrudTools(server as any, client);
-    const tool = findTool(tools, "read");
+    const tool = findTool(tools, "api_read");
 
     const result = await tool.handler({ identifier: ID_PAGE });
 
     expect(result.isError).toBe(true);
     const text = firstText(result);
-    expect(text).toContain("read");
+    expect(text).toContain("api_read");
     expect(text).toContain("Not Found");
   });
 
@@ -175,7 +175,7 @@ describe("read tool", () => {
     });
 
     registerCrudTools(server as any, client);
-    const tool = findTool(tools, "read");
+    const tool = findTool(tools, "api_read");
 
     const result = await tool.handler({
       identifier: { id: "huge-page-id", type: "page" },
@@ -197,7 +197,7 @@ describe("read tool", () => {
     });
 
     registerCrudTools(server as any, client);
-    const tool = findTool(tools, "read");
+    const tool = findTool(tools, "api_read");
     const parsedInput = await validateInputSchema(tool.config.inputSchema, {
       identifier: { id: "huge-page-id", type: "page" },
     });
@@ -217,7 +217,7 @@ describe("read tool", () => {
     });
 
     registerCrudTools(server as any, client);
-    const read = findTool(tools, "read");
+    const read = findTool(tools, "api_read");
     const listFacts = findTool(tools, "asset_list_facts");
     const searchValues = findTool(tools, "asset_search_values");
     const searchKeys = findTool(tools, "asset_search_keys");
@@ -375,7 +375,7 @@ describe("read tool", () => {
     });
 
     registerCrudTools(server as any, client);
-    const read = findTool(tools, "read");
+    const read = findTool(tools, "api_read");
     const info = findTool(tools, "file_data_info");
     const readData = findTool(tools, "file_data_read");
 
@@ -444,7 +444,7 @@ describe("read tool", () => {
     });
 
     registerCrudTools(server as any, client);
-    const read = findTool(tools, "read");
+    const read = findTool(tools, "api_read");
     const image = findTool(tools, "file_data_image");
 
     const readResult = await read.handler({ identifier: ID_FILE });
@@ -497,7 +497,7 @@ describe("read tool", () => {
       });
 
       registerCrudTools(server as any, client);
-      const read = findTool(tools, "read");
+      const read = findTool(tools, "api_read");
       const exportFile = findTool(tools, "file_data_export");
 
       expect(exportFile.config.annotations.destructiveHint).toBe(true);
@@ -553,7 +553,7 @@ describe("read tool", () => {
       });
 
       registerCrudTools(server as any, client);
-      const read = findTool(tools, "read");
+      const read = findTool(tools, "api_read");
       const exportFile = findTool(tools, "file_data_export");
 
       const readResult = await read.handler({ identifier: ID_FILE });
@@ -580,10 +580,10 @@ describe("read tool", () => {
 });
 
 // =============================================================================
-// create
+// api_create
 // =============================================================================
 
-describe("create tool", () => {
+describe("api_create tool", () => {
   test("happy path: calls client.create and returns created id", async () => {
     const { server, tools } = makeMockServer();
     const client = createMockClient({
@@ -591,7 +591,7 @@ describe("create tool", () => {
     });
 
     registerCrudTools(server as any, client);
-    const tool = findTool(tools, "create");
+    const tool = findTool(tools, "api_create");
 
     expect(tool.config.annotations.readOnlyHint).toBe(false);
     expect(tool.config.annotations.destructiveHint).toBe(false);
@@ -618,7 +618,7 @@ describe("create tool", () => {
     });
 
     registerCrudTools(server as any, client);
-    const tool = findTool(tools, "create");
+    const tool = findTool(tools, "api_create");
     const result = await tool.handler({
       asset: {
         file: {
@@ -663,7 +663,7 @@ describe("create tool", () => {
     const client = createMockClient();
 
     registerCrudTools(server as any, client);
-    const tool = findTool(tools, "create");
+    const tool = findTool(tools, "api_create");
 
     for (const key of assetPropertyKeysFromTypes()) {
       expect(tool.config.description).toContain(key);
@@ -678,20 +678,20 @@ describe("create tool", () => {
     });
 
     registerCrudTools(server as any, client);
-    const tool = findTool(tools, "create");
+    const tool = findTool(tools, "api_create");
 
     const result = await tool.handler({ asset: VALID_ASSET });
 
     expect(result.isError).toBe(true);
-    expect(firstText(result)).toContain("create");
+    expect(firstText(result)).toContain("api_create");
   });
 });
 
 // =============================================================================
-// edit
+// api_edit
 // =============================================================================
 
-describe("edit tool", () => {
+describe("api_edit tool", () => {
   test("happy path: calls client.edit with asset wrapper", async () => {
     const { server, tools } = makeMockServer();
     const client = createMockClient({
@@ -699,7 +699,7 @@ describe("edit tool", () => {
     });
 
     registerCrudTools(server as any, client);
-    const tool = findTool(tools, "edit");
+    const tool = findTool(tools, "api_edit");
 
     expect(tool.config.annotations.readOnlyHint).toBe(false);
     expect(tool.config.annotations.destructiveHint).toBe(false);
@@ -727,7 +727,7 @@ describe("edit tool", () => {
     });
 
     registerCrudTools(server as any, client);
-    const tool = findTool(tools, "edit");
+    const tool = findTool(tools, "api_edit");
     const result = await tool.handler({
       asset: {
         file: {
@@ -761,20 +761,20 @@ describe("edit tool", () => {
     });
 
     registerCrudTools(server as any, client);
-    const tool = findTool(tools, "edit");
+    const tool = findTool(tools, "api_edit");
 
     const result = await tool.handler({ asset: { page: { ...VALID_ASSET.page, id: "p1" } } });
 
     expect(result.isError).toBe(true);
-    expect(firstText(result)).toContain("edit");
+    expect(firstText(result)).toContain("api_edit");
   });
 });
 
 // =============================================================================
-// remove
+// api_remove
 // =============================================================================
 
-describe("remove tool", () => {
+describe("api_remove tool", () => {
   test("happy path: calls client.remove with identifier", async () => {
     const { server, tools } = makeMockServer();
     const client = createMockClient({
@@ -782,7 +782,7 @@ describe("remove tool", () => {
     });
 
     registerCrudTools(server as any, client);
-    const tool = findTool(tools, "remove");
+    const tool = findTool(tools, "api_remove");
 
     expect(tool.config.annotations.destructiveHint).toBe(true);
     expect(tool.config.annotations.idempotentHint).toBe(true);
@@ -803,7 +803,7 @@ describe("remove tool", () => {
     });
 
     registerCrudTools(server as any, client);
-    const tool = findTool(tools, "remove");
+    const tool = findTool(tools, "api_remove");
 
     const result = await tool.handler({
       identifier: { id: "site-1", type: "site" },
@@ -821,7 +821,7 @@ describe("remove tool", () => {
     });
 
     registerCrudTools(server as any, client);
-    const tool = findTool(tools, "remove");
+    const tool = findTool(tools, "api_remove");
 
     const result = await tool.handler({
       identifier: {
@@ -842,7 +842,7 @@ describe("remove tool", () => {
     });
 
     registerCrudTools(server as any, client);
-    const tool = findTool(tools, "remove");
+    const tool = findTool(tools, "api_remove");
 
     const result = await tool.handler({
       identifier: {
@@ -868,20 +868,20 @@ describe("remove tool", () => {
     });
 
     registerCrudTools(server as any, client);
-    const tool = findTool(tools, "remove");
+    const tool = findTool(tools, "api_remove");
 
     const result = await tool.handler({ identifier: ID_PAGE });
 
     expect(result.isError).toBe(true);
-    expect(firstText(result)).toContain("remove");
+    expect(firstText(result)).toContain("api_remove");
   });
 });
 
 // =============================================================================
-// move
+// api_move
 // =============================================================================
 
-describe("move tool", () => {
+describe("api_move tool", () => {
   test("happy path: calls client.move with identifier + moveParameters", async () => {
     const { server, tools } = makeMockServer();
     const client = createMockClient({
@@ -889,7 +889,7 @@ describe("move tool", () => {
     });
 
     registerCrudTools(server as any, client);
-    const tool = findTool(tools, "move");
+    const tool = findTool(tools, "api_move");
 
     expect(tool.config.annotations.destructiveHint).toBe(false);
     expect(tool.config.annotations.idempotentHint).toBe(false);
@@ -924,7 +924,7 @@ describe("move tool", () => {
     });
 
     registerCrudTools(server as any, client);
-    const tool = findTool(tools, "move");
+    const tool = findTool(tools, "api_move");
 
     const result = await tool.handler({
       identifier: ID_PAGE,
@@ -932,15 +932,15 @@ describe("move tool", () => {
     });
 
     expect(result.isError).toBe(true);
-    expect(firstText(result)).toContain("move");
+    expect(firstText(result)).toContain("api_move");
   });
 });
 
 // =============================================================================
-// copy
+// api_copy
 // =============================================================================
 
-describe("copy tool", () => {
+describe("api_copy tool", () => {
   test("happy path: calls client.copy with identifier + copyParameters", async () => {
     const { server, tools } = makeMockServer();
     const client = createMockClient({
@@ -948,7 +948,7 @@ describe("copy tool", () => {
     });
 
     registerCrudTools(server as any, client);
-    const tool = findTool(tools, "copy");
+    const tool = findTool(tools, "api_copy");
 
     expect(tool.config.annotations.destructiveHint).toBe(false);
     expect(tool.config.annotations.idempotentHint).toBe(false);
@@ -983,7 +983,7 @@ describe("copy tool", () => {
     });
 
     registerCrudTools(server as any, client);
-    const tool = findTool(tools, "copy");
+    const tool = findTool(tools, "api_copy");
 
     const result = await tool.handler({
       identifier: ID_PAGE,
@@ -995,7 +995,7 @@ describe("copy tool", () => {
     });
 
     expect(result.isError).toBe(true);
-    expect(firstText(result)).toContain("copy");
+    expect(firstText(result)).toContain("api_copy");
   });
 });
 
@@ -1012,6 +1012,12 @@ describe("registerCrudTools coverage", () => {
 
     const names = tools.map((t) => t.name).sort();
     expect(names).toEqual([
+      "api_copy",
+      "api_create",
+      "api_edit",
+      "api_move",
+      "api_read",
+      "api_remove",
       "asset_assert_values",
       "asset_get_nodelet",
       "asset_get_value",
@@ -1022,16 +1028,10 @@ describe("registerCrudTools coverage", () => {
       "asset_resolve_nodes",
       "asset_search_keys",
       "asset_search_values",
-      "copy",
-      "create",
-      "edit",
       "file_data_export",
       "file_data_image",
       "file_data_info",
       "file_data_read",
-      "move",
-      "read",
-      "remove",
     ]);
   });
 

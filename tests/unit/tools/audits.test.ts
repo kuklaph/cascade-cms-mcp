@@ -36,10 +36,10 @@ const PREFERENCES_OK = {
 } as const;
 
 // =============================================================================
-// read_audits
+// api_read_audits
 // =============================================================================
 
-describe("read_audits tool", () => {
+describe("api_read_audits tool", () => {
   test("happy path: calls client.readAudits (without pagination args) and returns paginated response", async () => {
     const { server, tools } = makeMockServer();
     const client = createMockClient({
@@ -48,7 +48,7 @@ describe("read_audits tool", () => {
 
     registerAuditTools(server as any, client);
 
-    const tool = findTool(tools, "read_audits");
+    const tool = findTool(tools, "api_read_audits");
     expect(tool.config.annotations.readOnlyHint).toBe(true);
     expect(tool.config.annotations.destructiveHint).toBe(false);
     expect(tool.config.annotations.idempotentHint).toBe(true);
@@ -85,7 +85,7 @@ describe("read_audits tool", () => {
     });
 
     registerAuditTools(server as any, client);
-    const tool = findTool(tools, "read_audits");
+    const tool = findTool(tools, "api_read_audits");
 
     const result = await tool.handler({ auditParameters: {} });
 
@@ -109,7 +109,7 @@ describe("read_audits tool", () => {
     });
 
     registerAuditTools(server as any, client);
-    const tool = findTool(tools, "read_audits");
+    const tool = findTool(tools, "api_read_audits");
 
     const result = await tool.handler({
       auditParameters: {},
@@ -140,22 +140,22 @@ describe("read_audits tool", () => {
     });
 
     registerAuditTools(server as any, client);
-    const tool = findTool(tools, "read_audits");
+    const tool = findTool(tools, "api_read_audits");
 
     const result = await tool.handler({ auditParameters: {} });
 
     expect(result.isError).toBe(true);
     const text = firstText(result);
-    expect(text).toContain("read_audits");
+    expect(text).toContain("api_read_audits");
     expect(text).toContain("Forbidden");
   });
 });
 
 // =============================================================================
-// read_preferences
+// api_read_preferences
 // =============================================================================
 
-describe("read_preferences tool", () => {
+describe("api_read_preferences tool", () => {
   test("happy path: calls client.readPreferences and returns success response", async () => {
     const { server, tools } = makeMockServer();
     const client = createMockClient({
@@ -163,7 +163,7 @@ describe("read_preferences tool", () => {
     });
 
     registerAuditTools(server as any, client);
-    const tool = findTool(tools, "read_preferences");
+    const tool = findTool(tools, "api_read_preferences");
 
     expect(tool.config.annotations.readOnlyHint).toBe(true);
     expect(tool.config.annotations.destructiveHint).toBe(false);
@@ -192,20 +192,20 @@ describe("read_preferences tool", () => {
     });
 
     registerAuditTools(server as any, client);
-    const tool = findTool(tools, "read_preferences");
+    const tool = findTool(tools, "api_read_preferences");
 
     const result = await tool.handler({});
 
     expect(result.isError).toBe(true);
-    expect(firstText(result)).toContain("read_preferences");
+    expect(firstText(result)).toContain("api_read_preferences");
   });
 });
 
 // =============================================================================
-// edit_preference
+// api_edit_preference
 // =============================================================================
 
-describe("edit_preference tool", () => {
+describe("api_edit_preference tool", () => {
   test("happy path: calls client.editPreference with preference body", async () => {
     const { server, tools } = makeMockServer();
     const client = createMockClient({
@@ -213,7 +213,7 @@ describe("edit_preference tool", () => {
     });
 
     registerAuditTools(server as any, client);
-    const tool = findTool(tools, "edit_preference");
+    const tool = findTool(tools, "api_edit_preference");
 
     expect(tool.config.annotations.readOnlyHint).toBe(false);
     expect(tool.config.annotations.destructiveHint).toBe(false);
@@ -247,14 +247,14 @@ describe("edit_preference tool", () => {
     });
 
     registerAuditTools(server as any, client);
-    const tool = findTool(tools, "edit_preference");
+    const tool = findTool(tools, "api_edit_preference");
 
     const result = await tool.handler({
       preference: { name: "unknown", value: "x" },
     });
 
     expect(result.isError).toBe(true);
-    expect(firstText(result)).toContain("edit_preference");
+    expect(firstText(result)).toContain("api_edit_preference");
   });
 });
 
@@ -271,9 +271,9 @@ describe("registerAuditTools coverage", () => {
 
     const names = tools.map((t) => t.name).sort();
     expect(names).toEqual([
-      "edit_preference",
-      "read_audits",
-      "read_preferences",
+      "api_edit_preference",
+      "api_read_audits",
+      "api_read_preferences",
     ]);
   });
 });

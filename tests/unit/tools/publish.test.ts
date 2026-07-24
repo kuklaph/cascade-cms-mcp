@@ -18,10 +18,10 @@ import { OK_RESULT } from "../../fixtures/cascade-responses.js";
 const ID_PAGE = { id: "abc123", type: "page" as const };
 
 // =============================================================================
-// publish_unpublish
+// api_publish_unpublish
 // =============================================================================
 
-describe("publish_unpublish tool", () => {
+describe("api_publish_unpublish tool", () => {
   test("happy path: calls client.publishUnpublish with identifier + publishInformation (publish)", async () => {
     const { server, tools } = makeMockServer();
     const client = createMockClient({
@@ -30,7 +30,7 @@ describe("publish_unpublish tool", () => {
 
     registerPublishTools(server as any, client);
 
-    const tool = findTool(tools, "publish_unpublish");
+    const tool = findTool(tools, "api_publish_unpublish");
     expect(tool.config.annotations.readOnlyHint).toBe(false);
     expect(tool.config.annotations.destructiveHint).toBe(true);
     expect(tool.config.annotations.idempotentHint).toBe(false);
@@ -70,7 +70,7 @@ describe("publish_unpublish tool", () => {
     });
 
     registerPublishTools(server as any, client);
-    const tool = findTool(tools, "publish_unpublish");
+    const tool = findTool(tools, "api_publish_unpublish");
 
     const result = await tool.handler({
       identifier: ID_PAGE,
@@ -79,7 +79,7 @@ describe("publish_unpublish tool", () => {
 
     expect(result.isError).toBe(true);
     const text = firstText(result);
-    expect(text).toContain("publish_unpublish");
+    expect(text).toContain("api_publish_unpublish");
     expect(text).toContain("Destination Unreachable");
   });
 });
@@ -96,6 +96,6 @@ describe("registerPublishTools coverage", () => {
     registerPublishTools(server as any, client);
 
     const names = tools.map((t) => t.name).sort();
-    expect(names).toEqual(["publish_unpublish"]);
+    expect(names).toEqual(["api_publish_unpublish"]);
   });
 });

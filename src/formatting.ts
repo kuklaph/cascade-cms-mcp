@@ -183,11 +183,11 @@ function createOversizeEnvelope(
     // Deprecated compatibility aliases. These values are not byte counts.
     bytes_total: fullText.length,
     bytes_returned: previewLength,
-    ...(handle ? { handle, tool: "read_response" as const } : {}),
+    ...(handle ? { handle, tool: "local_read_cached_response" as const } : {}),
     next_actions: handle
       ? [
           {
-            tool: "read_response",
+            tool: "local_read_cached_response",
             reason: "Retrieve additional characters from this cached JSON response.",
             input: { handle, offset: previewLength },
           },

@@ -1,6 +1,10 @@
 import { describe, test, expect } from "bun:test";
-import { registerReadResponseTool } from "../../../src/tools/readResponse.js";
-import { ReadResponseRequestSchema } from "../../../src/schemas/requests.js";
+import {
+  registerLocalReadCachedResponseTool,
+} from "../../../src/tools/localReadCachedResponse.js";
+import {
+  LocalReadCachedResponseRequestSchema,
+} from "../../../src/schemas/requests.js";
 import { createResponseCache } from "../../../src/cache.js";
 import { CHARACTER_LIMIT } from "../../../src/constants.js";
 import { makeMockServer, findTool, firstText } from "../../fixtures/mock-server.js";
@@ -9,34 +13,34 @@ function parsedText(result: { content: Array<{ type: string; text?: string }> })
   return JSON.parse(firstText(result as any));
 }
 
-describe("registerReadResponseTool: registration", () => {
-  test("registers read_response with read-only annotations", () => {
+describe("registerLocalReadCachedResponseTool: registration", () => {
+  test("registers local_read_cached_response with read-only annotations", () => {
     const { server, tools } = makeMockServer();
     const cache = createResponseCache();
 
-    registerReadResponseTool(server as any, { cache });
+    registerLocalReadCachedResponseTool(server as any, { cache });
 
-    const tool = findTool(tools, "read_response");
+    const tool = findTool(tools, "local_read_cached_response");
     expect(tool.config.annotations.readOnlyHint).toBe(true);
     expect(tool.config.annotations.idempotentHint).toBe(true);
     expect(tool.config.annotations.destructiveHint).toBe(false);
     expect(tool.config.annotations.openWorldHint).toBe(false);
-    expect(tool.config.description).toContain("read_response");
+    expect(tool.config.description).toContain("local_read_cached_response");
     expect(tool.config.description).toContain("UTF-16 code units");
     expect(tool.config.description).toContain("deprecated aliases");
   });
 });
 
-describe("read_response handler", () => {
+describe("local_read_cached_response handler", () => {
   test("returns slice_text in JSON text and structuredContent", async () => {
     const { server, tools } = makeMockServer();
     const cache = createResponseCache();
     const fullText = "abcdefghij".repeat(50);
     const handle = cache.put("read", fullText);
 
-    registerReadResponseTool(server as any, { cache });
+    registerLocalReadCachedResponseTool(server as any, { cache });
 
-    const tool = findTool(tools, "read_response");
+    const tool = findTool(tools, "local_read_cached_response");
     const result = await tool.handler({ handle, offset: 0, length: 100 });
     const textBody = parsedText(result);
     const sc = result.structuredContent as Record<string, unknown>;
@@ -60,9 +64,9 @@ describe("read_response handler", () => {
     const fullText = "é😀";
     const handle = cache.put("read", fullText);
 
-    registerReadResponseTool(server as any, { cache });
+    registerLocalReadCachedResponseTool(server as any, { cache });
 
-    const tool = findTool(tools, "read_response");
+    const tool = findTool(tools, "local_read_cached_response");
     const result = await tool.handler({ handle, offset: 0, length: 10 });
     const sc = result.structuredContent as Record<string, unknown>;
 
@@ -79,9 +83,9 @@ describe("read_response handler", () => {
     const fullText = "X".repeat(50) + "Y".repeat(50);
     const handle = cache.put("read", fullText);
 
-    registerReadResponseTool(server as any, { cache });
+    registerLocalReadCachedResponseTool(server as any, { cache });
 
-    const tool = findTool(tools, "read_response");
+    const tool = findTool(tools, "local_read_cached_response");
     const result = await tool.handler({ handle, offset: 50, length: 50 });
     const sc = result.structuredContent as Record<string, unknown>;
 
@@ -97,9 +101,9 @@ describe("read_response handler", () => {
     const fullText = '"\\\n'.repeat(30000);
     const handle = cache.put("read", fullText);
 
-    registerReadResponseTool(server as any, { cache });
+    registerLocalReadCachedResponseTool(server as any, { cache });
 
-    const tool = findTool(tools, "read_response");
+    const tool = findTool(tools, "local_read_cached_response");
     const result = await tool.handler({
       handle,
       offset: 0,
@@ -119,9 +123,9 @@ describe("read_response handler", () => {
     const cache = createResponseCache();
     const handle = cache.put("read", "small");
 
-    registerReadResponseTool(server as any, { cache });
+    registerLocalReadCachedResponseTool(server as any, { cache });
 
-    const tool = findTool(tools, "read_response");
+    const tool = findTool(tools, "local_read_cached_response");
     const result = await tool.handler({ handle, offset: 100, length: 25 });
     const sc = result.structuredContent as Record<string, unknown>;
 
@@ -135,9 +139,9 @@ describe("read_response handler", () => {
     const { server, tools } = makeMockServer();
     const cache = createResponseCache();
 
-    registerReadResponseTool(server as any, { cache });
+    registerLocalReadCachedResponseTool(server as any, { cache });
 
-    const tool = findTool(tools, "read_response");
+    const tool = findTool(tools, "local_read_cached_response");
     const result = await tool.handler({
       handle: "h_deadbeef",
       offset: 0,
@@ -151,9 +155,11 @@ describe("read_response handler", () => {
   });
 });
 
-describe("ReadResponseRequestSchema", () => {
+describe("LocalReadCachedResponseRequestSchema", () => {
   test("accepts a valid request and applies defaults", () => {
-    const res = ReadResponseRequestSchema.safeParse({ handle: "h_abc" });
+    const res = LocalReadCachedResponseRequestSchema.safeParse({
+      handle: "h_abc",
+    });
 
     expect(res.success).toBe(true);
     if (res.success) {
@@ -163,12 +169,17 @@ describe("ReadResponseRequestSchema", () => {
   });
 
   test("rejects invalid handle, offset, and length", () => {
-    expect(ReadResponseRequestSchema.safeParse({ handle: "" }).success).toBe(false);
     expect(
-      ReadResponseRequestSchema.safeParse({ handle: "h_abc", offset: -1 }).success,
+      LocalReadCachedResponseRequestSchema.safeParse({ handle: "" }).success,
     ).toBe(false);
     expect(
-      ReadResponseRequestSchema.safeParse({
+      LocalReadCachedResponseRequestSchema.safeParse({
+        handle: "h_abc",
+        offset: -1,
+      }).success,
+    ).toBe(false);
+    expect(
+      LocalReadCachedResponseRequestSchema.safeParse({
         handle: "h_abc",
         length: CHARACTER_LIMIT + 1,
       }).success,

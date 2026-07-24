@@ -295,7 +295,7 @@ export function registerCascadeResources(
     new ResourceTemplate("cascade://asset/{handle}/raw", { list: undefined }),
     {
       description:
-        "Exact raw JSON cached from a prior read preview. Replace {handle} with structuredContent.asset_handle.",
+        "Exact raw JSON cached from a prior api_read preview. Replace {handle} with structuredContent.asset_handle.",
       mimeType: "application/json",
     },
     async (uri: URL, variables) => {
@@ -314,7 +314,7 @@ export function registerCascadeResources(
           JSON.stringify(
             {
               error:
-                "Asset handle not found. Re-run read to create a fresh asset_handle.",
+                "Asset handle not found. Re-run api_read to create a fresh asset_handle.",
             },
             null,
             2,

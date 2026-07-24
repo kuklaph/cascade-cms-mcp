@@ -1,10 +1,10 @@
 /**
  * Message tools: 4 user-mailbox and subscription operations.
  *
- *   list_subscribers — list an asset's relationships (what references it) and notification subscribers
- *   list_messages    — list the authenticated user's messages
- *   mark_message     — change a message's read state
- *   delete_message   — permanently delete a message
+ *   api_list_subscribers — list an asset's relationships (what references it) and notification subscribers
+ *   api_list_messages    — list the authenticated user's messages
+ *   api_mark_message     — change a message's read state
+ *   api_delete_message   — permanently delete a message
  *
  * Each tool is a thin `registerCascadeTool` call delegating to the
  * matching `CascadeClient` method.
@@ -32,7 +32,7 @@ export function registerMessageTools(
   deps?: CascadeDeps,
 ): void {
   registerCascadeTool(server, {
-    name: "list_subscribers",
+    name: "api_list_subscribers",
     title: "List Asset Relationships & Subscribers",
     description: buildCascadeToolDescription(
       `List the relationships an asset has — the other assets that reference it (\"what is using this?\") and the users subscribed to its notifications.
@@ -65,8 +65,8 @@ Examples:
   - Use when: "What relationships does this block have?" / "Which pages use this block?" -> { identifier: { type: "block_XHTML_DATADEFINITION", id: "<blockId>" } } then inspect response entries.
   - Use when: "Which assets link to this file?" -> { identifier: { type: "file", id: "<fileId>" } }.
   - Use when: "Who gets notified when /about changes?" -> { identifier: { type: "folder", path: { path: "/about", siteName: "www" } } }.
-  - Don't use when: You want outbound relationships — i.e. "which blocks does this page embed?". That direction isn't queryable; read the page and inspect its body.
-  - Don't use when: You want to read messages sent — use list_messages.
+  - Don't use when: You want outbound relationships — i.e. "which blocks does this page embed?". That direction isn't queryable; use api_read and inspect the page body.
+  - Don't use when: You want to read messages sent — use api_list_messages.
 
 Error Handling:
   - "Asset not found" when the identifier doesn't resolve
@@ -83,12 +83,12 @@ Error Handling:
   }, deps);
 
   registerCascadeTool(server, {
-    name: "list_messages",
+    name: "api_list_messages",
     title: "List User Messages",
     description: buildCascadeToolDescription(
       `List in-Cascade mailbox messages for the authenticated user.
 
-Cascade has an internal message center — workflow requests, publish notifications, system alerts, and peer messages all land here. Returns all messages visible to the authenticated user (both unread and read, active inbox and archived, depending on your Cascade server's defaults). Message IDs from this list can be passed to mark_message or delete_message.
+Cascade has an internal message center — workflow requests, publish notifications, system alerts, and peer messages all land here. Returns all messages visible to the authenticated user (both unread and read, active inbox and archived, depending on your Cascade server's defaults). Message IDs from this list can be passed to api_mark_message or api_delete_message.
 
 Args:
   - limit (number, optional): Max results per page, 1-500 (default 50)
@@ -113,8 +113,8 @@ Returns:
 Examples:
   - Use when: "What's in my Cascade inbox?" -> {}
   - Use when: "Check if workflow messages are waiting" -> {} then filter messages by subject.
-  - Don't use when: You want an asset's relationships or subscribers — use list_subscribers.
-  - Don't use when: You want audit events — use read_audits.
+  - Don't use when: You want an asset's relationships or subscribers — use api_list_subscribers.
+  - Don't use when: You want audit events — use api_read_audits.
 
 Pagination:
   - Default limit of 50 works for most inboxes. Increase up to 500 for larger ones.
@@ -139,7 +139,7 @@ Error Handling:
   }, deps);
 
   registerCascadeTool(server, {
-    name: "mark_message",
+    name: "api_mark_message",
     title: "Mark Message",
     description: buildCascadeToolDescription(
       `Mark a Cascade inbox message as read or unread.
@@ -148,7 +148,7 @@ Toggles the read status of a single message. markType controls the action: "read
 
 Args:
   - identifier (object, required): The message to mark
-    - id (string, required): Message ID (from list_messages)
+    - id (string, required): Message ID (from api_list_messages)
     - type (string, required): Must be "message"
   - markType (string, required): One of "read" | "unread"
 
@@ -159,8 +159,8 @@ Returns:
 
 Examples:
   - Use when: "Mark a workflow notice as read" -> { identifier: { type: "message", id: "..." }, markType: "read" }
-  - Don't use when: You want to delete — use delete_message.
-  - Don't use when: You want to list — use list_messages.
+  - Don't use when: You want to delete — use api_delete_message.
+  - Don't use when: You want to list — use api_list_messages.
 
 Error Handling:
   - "Message not found" when the identifier doesn't resolve
@@ -178,7 +178,7 @@ Error Handling:
   }, deps);
 
   registerCascadeTool(server, {
-    name: "delete_message",
+    name: "api_delete_message",
     title: "Delete Message",
     description: buildCascadeToolDescription(
       `Permanently delete a message from the authenticated user's Cascade mailbox.
@@ -187,7 +187,7 @@ This is a DESTRUCTIVE operation — once deleted, the message cannot be recovere
 
 Args:
   - identifier (object, required): The message to delete
-    - id (string, required): Message ID (from list_messages)
+    - id (string, required): Message ID (from api_list_messages)
     - type (string, required): Must be "message"
 
 Returns:
@@ -197,7 +197,7 @@ Returns:
 
 Examples:
   - Use when: "Permanently clear spam-like notifications" -> { identifier: { type: "message", id: "..." } }
-  - Don't use when: You only want to mark it read/unread — use mark_message.
+  - Don't use when: You only want to mark it read/unread — use api_mark_message.
   - Don't use when: You want to delete in bulk — this deletes one message per call.
 
 Error Handling:

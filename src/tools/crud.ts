@@ -1,12 +1,12 @@
 /**
  * CRUD and cached asset follow-up tools exposed to MCP clients.
  *
- *   read   — fetch an asset by identifier
- *   create — create a new asset
- *   edit   — edit an existing asset
- *   remove — delete an asset
- *   move   — move and/or rename an asset
- *   copy   — copy an asset to a new location
+ *   api_read   — fetch an asset by identifier
+ *   api_create — create a new asset
+ *   api_edit   — edit an existing asset
+ *   api_remove — delete an asset
+ *   api_move   — move and/or rename an asset
+ *   api_copy   — copy an asset to a new location
  *
  * CRUD tools delegate to the matching `CascadeClient` method. Cached follow-up
  * tools inspect local read-cache entries without calling Cascade.
@@ -88,7 +88,7 @@ function registerAssetFollowUpTools(
     name: "asset_list_facts",
     title: "List cached raw asset facts",
     description: buildCascadeToolDescription(
-      `Use after read. Browse object, array, key, and scalar facts indexed from the full cached raw Cascade response. Use this for audit/debug enumeration; when the task is to find text or content by snippet, prefer asset_search_values because list_facts can return both key facts and scalar facts for the same value. Supports pointer, key, value, scalar, and reference filters with cursor pagination. This tool never reads Cascade directly and reports complete: true only when the current filter has no remaining matches.`,
+      `Use after api_read. Browse object, array, key, and scalar facts indexed from the full cached raw Cascade response. Use this for audit/debug enumeration; when the task is to find text or content by snippet, prefer asset_search_values because list_facts can return both key facts and scalar facts for the same value. Supports pointer, key, value, scalar, and reference filters with cursor pagination. This tool never reads Cascade directly and reports complete: true only when the current filter has no remaining matches.`,
     ),
     inputSchema: AssetListFactsRequestSchema,
     annotations: {
@@ -110,7 +110,7 @@ function registerAssetFollowUpTools(
     name: "asset_search_values",
     title: "Search cached raw asset scalar values",
     description: buildCascadeToolDescription(
-      `Use after read. Search full scalar string/number/boolean/null values across the cached raw Cascade response, not shortened previews. Best first choice for finding text/content by known snippet. Returns JSON Pointer provenance, scalar type, value length, preview, and match offsets where practical. This tool never reads Cascade directly.`,
+      `Use after api_read. Search full scalar string/number/boolean/null values across the cached raw Cascade response, not shortened previews. Best first choice for finding text/content by known snippet. Returns JSON Pointer provenance, scalar type, value length, preview, and match offsets where practical. This tool never reads Cascade directly.`,
     ),
     inputSchema: AssetSearchValuesRequestSchema,
     annotations: {
@@ -132,7 +132,7 @@ function registerAssetFollowUpTools(
     name: "asset_search_keys",
     title: "Search cached raw asset object keys",
     description: buildCascadeToolDescription(
-      `Use after read. Find object key occurrences anywhere in the cached raw Cascade response. Returns the JSON Pointer to the keyed value plus parent pointer. This tool never reads Cascade directly.`,
+      `Use after api_read. Find object key occurrences anywhere in the cached raw Cascade response. Returns the JSON Pointer to the keyed value plus parent pointer. This tool never reads Cascade directly.`,
     ),
     inputSchema: AssetSearchKeysRequestSchema,
     annotations: {
@@ -154,7 +154,7 @@ function registerAssetFollowUpTools(
     name: "asset_get_value",
     title: "Get cached raw asset value",
     description: buildCascadeToolDescription(
-      `Use after read. Retrieve the exact raw cached value at a JSON Pointer. Long strings can be sliced with offset and length. This tool never reads Cascade directly.`,
+      `Use after api_read. Retrieve the exact raw cached value at a JSON Pointer. Long strings can be sliced with offset and length. This tool never reads Cascade directly.`,
     ),
     inputSchema: AssetGetValueRequestSchema,
     annotations: {
@@ -179,7 +179,7 @@ function registerAssetFollowUpTools(
     name: "asset_list_references",
     title: "List cached Cascade asset references",
     description: buildCascadeToolDescription(
-      `Use after read. List Cascade-native references discovered from id/path pairs, structured asset nodes, metadata, page configurations, and page regions. This tool never reads Cascade directly.`,
+      `Use after api_read. List Cascade-native references discovered from id/path pairs, structured asset nodes, metadata, page configurations, and page regions. This tool never reads Cascade directly.`,
     ),
     inputSchema: AssetListReferencesRequestSchema,
     annotations: {
@@ -201,7 +201,7 @@ function registerAssetFollowUpTools(
     name: "asset_list_scalar_artifacts",
     title: "List cached raw scalar artifacts",
     description: buildCascadeToolDescription(
-      `Use after read. Enumerate derived link/path-like artifacts from cached raw string scalar facts. Use href for any value found in an HTML/XHTML href attribute, whether absolute, root-relative, relative, or site://; use site_link for non-root, non-URL Cascade *Path fields such as pagePath, filePath, blockPath, and parentFolderPath. Other artifact kinds include http_url, src, anchor, mailto, tel, and root_path. Returns JSON Pointer and offset provenance. This tool never reads Cascade directly.`,
+      `Use after api_read. Enumerate derived link/path-like artifacts from cached raw string scalar facts. Use href for any value found in an HTML/XHTML href attribute, whether absolute, root-relative, relative, or site://; use site_link for non-root, non-URL Cascade *Path fields such as pagePath, filePath, blockPath, and parentFolderPath. Other artifact kinds include http_url, src, anchor, mailto, tel, and root_path. Returns JSON Pointer and offset provenance. This tool never reads Cascade directly.`,
     ),
     inputSchema: AssetListScalarArtifactsRequestSchema,
     annotations: {
@@ -223,7 +223,7 @@ function registerAssetFollowUpTools(
     name: "asset_list_nodelets",
     title: "List cached Cascade asset nodelets",
     description: buildCascadeToolDescription(
-      `Use after read. List child structuredData nodelets for a JSON Pointer in the cached asset_handle returned by read. Use pointer "" to list root nodelets. This is a convenience view over structuredDataNodes, not an audit-complete view. This tool never reads Cascade directly.`,
+      `Use after api_read. List child structuredData nodelets for a JSON Pointer in the cached asset_handle returned by api_read. Use pointer "" to list root nodelets. This is a convenience view over structuredDataNodes, not an audit-complete view. This tool never reads Cascade directly.`,
     ),
     inputSchema: AssetListNodeletsRequestSchema,
     annotations: {
@@ -279,7 +279,7 @@ function registerAssetFollowUpTools(
     name: "asset_get_nodelet",
     title: "Get cached Cascade asset nodelet",
     description: buildCascadeToolDescription(
-      `Use after read. Fetch the exact structuredData nodelet or bounded subtree at a JSON Pointer in the cached asset_handle returned by read. This is a convenience view over structuredDataNodes, not an audit-complete view. This tool never reads Cascade directly.`,
+      `Use after api_read. Fetch the exact structuredData nodelet or bounded subtree at a JSON Pointer in the cached asset_handle returned by api_read. This is a convenience view over structuredDataNodes, not an audit-complete view. This tool never reads Cascade directly.`,
     ),
     inputSchema: AssetGetNodeletRequestSchema,
     annotations: {
@@ -308,7 +308,7 @@ function registerAssetFollowUpTools(
     name: "asset_resolve_nodes",
     title: "Resolve cached structured data nodes",
     description: buildCascadeToolDescription(
-      `Use after read. Resolve structuredData nodes from the cached asset_handle by node type, identifier, text, direct child criteria, or field values. This tool never reads Cascade directly.`,
+      `Use after api_read. Resolve structuredData nodes from the cached asset_handle by node type, identifier, text, direct child criteria, or field values. This tool never reads Cascade directly.`,
     ),
     inputSchema: AssetResolveNodesRequestSchema,
     annotations: {
@@ -335,7 +335,7 @@ function registerAssetFollowUpTools(
     name: "asset_assert_values",
     title: "Assert cached structured data values",
     description: buildCascadeToolDescription(
-      `Use after read. Assert structuredData values from the cached asset_handle by semantic node selector and target field. This tool never reads Cascade directly.`,
+      `Use after api_read. Assert structuredData values from the cached asset_handle by semantic node selector and target field. This tool never reads Cascade directly.`,
     ),
     inputSchema: AssetAssertValuesRequestSchema,
     annotations: {
@@ -362,7 +362,7 @@ function registerAssetFollowUpTools(
     name: "file_data_info",
     title: "Inspect Cascade file data",
     description: buildCascadeToolDescription(
-      `Inspect binary data for a Cascade file asset without dumping the raw byte array. Use asset_handle after read preview, or identifier for a direct file read that creates a fresh asset_handle for follow-up calls.`,
+      `Inspect binary data for a Cascade file asset without dumping the raw byte array. Use asset_handle after api_read preview, or identifier for a direct file read that creates a fresh asset_handle for follow-up calls.`,
     ),
     inputSchema: FileDataInfoRequestSchema,
     annotations: {
@@ -387,7 +387,7 @@ function registerAssetFollowUpTools(
     name: "file_data_read",
     title: "Read Cascade file data range",
     description: buildCascadeToolDescription(
-      `Read a bounded byte range from binary data for a Cascade file asset. Use this instead of reading file.data directly when the file may be large. Accepts asset_handle after read preview, or identifier for a direct file read that creates a fresh asset_handle.`,
+      `Read a bounded byte range from binary data for a Cascade file asset. Use this instead of reading file.data directly when the file may be large. Accepts asset_handle after api_read preview, or identifier for a direct file read that creates a fresh asset_handle.`,
     ),
     inputSchema: FileDataReadRequestSchema,
     annotations: {
@@ -420,7 +420,7 @@ function registerAssetFollowUpTools(
     name: "file_data_image",
     title: "Return Cascade file data as image-only content",
     description: buildCascadeToolDescription(
-      `Return binary data for a Cascade image file as MCP image content only, with no JSON text metadata. Use file_data_info separately when metadata is needed. Accepts asset_handle after read preview, or identifier for a direct file read that creates a fresh asset_handle.`,
+      `Return binary data for a Cascade image file as MCP image content only, with no JSON text metadata. Use file_data_info separately when metadata is needed. Accepts asset_handle after api_read preview, or identifier for a direct file read that creates a fresh asset_handle.`,
     ),
     inputSchema: FileDataImageRequestSchema,
     annotations: {
@@ -648,7 +648,7 @@ function getAssetEntry(
   const entry = assetCache.get(handle);
   if (!entry) {
     throw new Error(
-      `${toolName}: asset handle ${handle} not found. Re-run read to create a fresh asset_handle.`,
+      `${toolName}: asset handle ${handle} not found. Re-run api_read to create a fresh asset_handle.`,
     );
   }
   return entry;
@@ -663,7 +663,7 @@ export function registerCrudTools(
   const assetCache = resolved.assetCache ?? createAssetCache();
 
   registerCascadeTool(server, {
-    name: "read",
+    name: "api_read",
     title: "Read Cascade Asset",
     description: buildCascadeToolDescription(
       `Read an asset from Cascade CMS by identifier.
@@ -691,9 +691,9 @@ Examples:
   - Use when: "Read the homepage" -> { identifier: { type: "page", path: { path: "/", siteName: "www" } } }
   - Use when: "Get file by ID" -> { identifier: { type: "file", id: "abc123..." } }
   - Use when: "Load folder config" -> { identifier: { type: "folder", path: { path: "/about", siteName: "www" } } }
-  - Don't use when: You already have a complete edit payload — use edit instead.
-  - Use when: You need a cached starting point for draft editing — read preview, then use local_draft_open.
-  - Don't use when: You want to check access rights — use read_access_rights.
+  - Don't use when: You already have a complete edit payload — use api_edit instead.
+  - Use when: You need a cached starting point for draft editing — api_read preview, then use local_draft_open.
+  - Don't use when: You want to check access rights — use api_read_access_rights.
 
 Error Handling:
   - "Asset not found" when the identifier doesn't resolve
@@ -735,7 +735,7 @@ Error Handling:
   registerAssetFollowUpTools(server, client, assetCache, resolved);
 
   registerCascadeTool(server, {
-    name: "create",
+    name: "api_create",
     title: "Create Cascade Asset",
     description: buildCascadeToolDescription(
       `Create a new asset in Cascade CMS.
@@ -744,7 +744,7 @@ The request body wraps a typed concrete asset envelope under \`asset\` — one c
 
 Payload conventions (apply to every create call):
   - Send ONLY the fields you actually need to set. Every optional field should be omitted unless you have a real value to provide — Cascade applies its own defaults server-side. Do not pad payloads with "reasonable defaults" like \`reviewOnSchedule: false\` or \`shouldBePublished: true\` when you do not need to override them.
-  - For every \`<thing>Id\` / \`<thing>Path\` pair (parentFolderId vs parentFolderPath, siteId vs siteName, contentTypeId vs contentTypePath, metadataSetId vs metadataSetPath, ...), prefer the id form when you know the id. Path is a valid fallback and Cascade resolves it server-side — don't round-trip through read just to look up an id.
+  - For every \`<thing>Id\` / \`<thing>Path\` pair (parentFolderId vs parentFolderPath, siteId vs siteName, contentTypeId vs contentTypePath, metadataSetId vs metadataSetPath, ...), prefer the id form when you know the id. Path is a valid fallback and Cascade resolves it server-side — don't round-trip through api_read just to look up an id.
   - File uploads: \`asset.file.data\` accepts signed Java bytes (-128..127) or unsigned file bytes (0..255); this MCP sends Cascade signed bytes. Cascade file assets may carry text, data, or both depending on file type.
   - Text encoding: rich-text fields (xhtml, WYSIWYG structuredData text, xmlBlock xml) must be well-formed XML — named HTML entities like \`&nbsp;\` and astral-plane Unicode (including emoji) crash the render. See resource \`cascade://text-encoding\` for the per-field-category rules.
 
@@ -768,8 +768,8 @@ Examples:
   - Use when: "Create a page under /about" -> { asset: { page: { name: "team", parentFolderPath: "/about", siteName: "www", contentTypePath: "/standard-page", xhtml: "<p>Team</p>" } } }
   - Use when: "Upload a text file" -> { asset: { file: { name: "robots.txt", parentFolderPath: "/", siteName: "www", text: "User-agent: *" } } }
   - Use when: "Create a text block" -> { asset: { textBlock: { name: "greeting", parentFolderPath: "/blocks", siteName: "www", text: "Hello" } } }
-  - Don't use when: The asset already exists — use edit.
-  - Don't use when: You want to duplicate an existing asset — use copy.
+  - Don't use when: The asset already exists — use api_edit.
+  - Don't use when: You want to duplicate an existing asset — use api_copy.
 
 Error Handling:
   - "Parent folder not found" when parentFolderId/parentFolderPath is invalid
@@ -788,12 +788,12 @@ Error Handling:
   }, deps);
 
   registerCascadeTool(server, {
-    name: "edit",
+    name: "api_edit",
     title: "Edit Cascade Asset",
     description: buildCascadeToolDescription(
       `Edit an existing Cascade CMS asset.
 
-Accepts the full asset body using the same envelope wrapper as create, with edit-specific validation. The workflow is symmetric when read is called with read_mode: "raw": remove read-only inner type fields from the raw asset envelope, modify the envelope, and pass it back to edit. Some asset types require a prior check_out.
+Accepts the full asset body using the same envelope wrapper as create, with edit-specific validation. The workflow is symmetric when api_read is called with read_mode: "raw": remove read-only inner type fields from the raw asset envelope, modify the envelope, and pass it back to api_edit. Some asset types require a prior api_check_out.
 
 Payload conventions:
   - Edit replaces the asset body, so send the full object as read — do not try to send only the fields you are changing.
@@ -811,10 +811,10 @@ Returns:
   On failure: { success: false, message: "<error>" }
 
 Examples:
-  - Use when: "Update a page's metadata" -> Read first with read using read_mode: "raw"; remove read-only inner type fields; modify \`asset.page.metadata\`; pass { asset: raw.asset } back.
+  - Use when: "Update a page's metadata" -> Call api_read first with read_mode: "raw"; remove read-only inner type fields; modify \`asset.page.metadata\`; pass { asset: raw.asset } back.
   - Use when: "Change a block's structured data" -> Read raw first; remove read-only inner type fields; modify the full xhtmlDataDefinitionBlock envelope; pass { asset: raw.asset }.
   - Use when: "Rewrite a symlink's target" -> Read raw first; remove read-only inner type fields; modify asset.symlink.linkURL on the full envelope; pass { asset: raw.asset }.
-  - Don't use when: The asset doesn't exist — use create.
+  - Don't use when: The asset doesn't exist — use api_create.
   - Don't use when: You want a partial patch — Cascade's edit replaces the asset body; always send the full object.
 
 Error Handling:
@@ -834,7 +834,7 @@ Error Handling:
   }, deps);
 
   registerCascadeTool(server, {
-    name: "remove",
+    name: "api_remove",
     title: "Remove (Delete) Cascade Asset",
     description: buildCascadeToolDescription(
       `Delete an asset from Cascade CMS.
@@ -861,8 +861,8 @@ Returns:
 Examples:
   - Use when: "Delete a page" -> { identifier: { type: "page", id: "..." } }
   - Use when: "Unpublish then delete" -> { identifier: { type: "page", id: "..." }, deleteParameters: { doWorkflow: false, unpublish: true } }
-  - Don't use when: You just want to move/rename — use move.
-  - Don't use when: You want to unpublish without deleting — use publish_unpublish with unpublish: true.
+  - Don't use when: You just want to move/rename — use api_move.
+  - Don't use when: You want to unpublish without deleting — use api_publish_unpublish with unpublish: true.
 
 Error Handling:
   - "Asset not found" when the identifier doesn't resolve
@@ -881,7 +881,7 @@ Error Handling:
   }, deps);
 
   registerCascadeTool(server, {
-    name: "move",
+    name: "api_move",
     title: "Move or Rename Cascade Asset",
     description: buildCascadeToolDescription(
       `Move an asset to a new container and/or rename it.
@@ -908,7 +908,7 @@ Returns:
 Examples:
   - Use when: "Rename /about/teem to /about/team" -> { identifier: { type: "page", id: "..." }, moveParameters: { doWorkflow: false, newName: "team" } }
   - Use when: "Move page to /archive" -> { identifier: { type: "page", id: "..." }, moveParameters: { doWorkflow: false, destinationContainerIdentifier: { type: "folder", path: { path: "/archive", siteName: "www" } } } }
-  - Don't use when: You want to duplicate — use copy.
+  - Don't use when: You want to duplicate — use api_copy.
 
 Error Handling:
   - "Asset not found" when the source identifier doesn't resolve
@@ -927,12 +927,12 @@ Error Handling:
   }, deps);
 
   registerCascadeTool(server, {
-    name: "copy",
+    name: "api_copy",
     title: "Copy Cascade Asset",
     description: buildCascadeToolDescription(
       `Copy an asset to a new container with a new name.
 
-Creates a fresh, independent copy of an asset. Unlike move, the original stays in place and the copy gets its own ID. destinationContainerIdentifier and newName are both required. For copying an entire site, use site_copy instead.
+Creates a fresh, independent copy of an asset. Unlike move, the original stays in place and the copy gets its own ID. destinationContainerIdentifier and newName are both required. For copying an entire site, use api_site_copy instead.
 
 Args:
   - identifier (object, required): The source asset to copy
@@ -953,8 +953,8 @@ Returns:
 
 Examples:
   - Use when: "Duplicate /templates/basic as /templates/basic-v2" -> { identifier: { type: "page", path: { path: "/templates/basic", siteName: "www" } }, copyParameters: { destinationContainerIdentifier: { type: "folder", path: { path: "/templates", siteName: "www" } }, newName: "basic-v2", doWorkflow: false } }
-  - Don't use when: You want to rename in place — use move.
-  - Don't use when: You want to copy an entire site — use site_copy.
+  - Don't use when: You want to rename in place — use api_move.
+  - Don't use when: You want to copy an entire site — use api_site_copy.
 
 Error Handling:
   - "Asset not found" when the source identifier doesn't resolve

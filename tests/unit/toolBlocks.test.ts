@@ -146,10 +146,38 @@ describe("tool block store", () => {
   });
 });
 
+const DIRECT_REST_TOOL_NAMES = [
+  "read",
+  "create",
+  "edit",
+  "remove",
+  "move",
+  "copy",
+  "search",
+  "list_sites",
+  "site_copy",
+  "read_access_rights",
+  "edit_access_rights",
+  "read_workflow_settings",
+  "edit_workflow_settings",
+  "read_workflow_information",
+  "perform_workflow_transition",
+  "list_subscribers",
+  "list_messages",
+  "mark_message",
+  "delete_message",
+  "check_out",
+  "check_in",
+  "read_audits",
+  "read_preferences",
+  "edit_preference",
+  "publish_unpublish",
+] as const;
+
 describe("findDeniedToolCall", () => {
-  test("matches a blocked direct tool by URL-derived id and type", () => {
+  test("matches a blocked current REST tool by URL-derived id and type", () => {
     const denied = findDeniedToolCall(
-      "edit",
+      "api_edit",
       {
         asset: {
           xhtmlDataDefinitionBlock: {
@@ -159,51 +187,77 @@ describe("findDeniedToolCall", () => {
       },
       [
         {
-          url: "https://college.cascadecms.com/entity/open.act?id=block-1&type=block",
-          tools: ["edit"],
+          url: "https://tenant.cascadecms.com/entity/open.act?id=block-1&type=block",
+          tools: ["api_edit"],
         },
       ],
     );
 
-    expect(denied?.tools).toEqual(["edit"]);
+    expect(denied?.tools).toEqual(["api_edit"]);
   });
 
-  test("matches legacy cascade-prefixed persisted tool names", () => {
+  test("matches every old unprefixed REST tool rule against its api-prefixed name", () => {
+    for (const legacyName of DIRECT_REST_TOOL_NAMES) {
+      const rule = {
+        type: "page" as const,
+        id: "page-1",
+        tools: [legacyName],
+      };
+      expect(
+        findDeniedToolCall(
+          `api_${legacyName}`,
+          { identifier: { type: "page", id: "page-1" } },
+          [rule],
+        ),
+      ).toBe(rule);
+    }
+  });
+
+  test("matches every legacy cascade-prefixed REST rule against its api-prefixed name", () => {
+    for (const legacyName of DIRECT_REST_TOOL_NAMES) {
+      const rule = {
+        type: "page" as const,
+        id: "page-1",
+        tools: [`cascade_${legacyName}`],
+      };
+      expect(
+        findDeniedToolCall(
+          `api_${legacyName}`,
+          { identifier: { type: "page", id: "page-1" } },
+          [rule],
+        ),
+      ).toBe(rule);
+    }
+  });
+
+  test("matches legacy cascade-prefixed persisted draft tool names", () => {
     const rules = [
-      { type: "page" as const, id: "page-1", tools: ["cascade_edit"] },
-      { type: "page" as const, id: "page-2", tools: ["cascade_draft_submit"] },
-      { type: "page" as const, id: "page-3", tools: ["cascade_draft_open"] },
-      { type: "page" as const, id: "page-4", tools: ["cascade_draft_scaffold_create"] },
+      { type: "page" as const, id: "page-1", tools: ["cascade_draft_submit"] },
+      { type: "page" as const, id: "page-2", tools: ["cascade_draft_open"] },
+      { type: "page" as const, id: "page-3", tools: ["cascade_draft_scaffold_create"] },
     ];
 
     expect(
       findDeniedToolCall(
-        "edit",
-        { identifier: { type: "page", id: "page-1" } },
+        "local_draft_submit",
+        { asset: { page: { id: "page-1" } } },
         rules,
       ),
     ).toBe(rules[0]);
     expect(
       findDeniedToolCall(
-        "local_draft_submit",
+        "local_draft_open",
         { asset: { page: { id: "page-2" } } },
         rules,
       ),
     ).toBe(rules[1]);
     expect(
       findDeniedToolCall(
-        "local_draft_open",
+        "local_draft_scaffold_create",
         { asset: { page: { id: "page-3" } } },
         rules,
       ),
     ).toBe(rules[2]);
-    expect(
-      findDeniedToolCall(
-        "local_draft_scaffold_create",
-        { asset: { page: { id: "page-4" } } },
-        rules,
-      ),
-    ).toBe(rules[3]);
   });
 
   test("does not match a URL-only rule when the URL type differs from the payload type", () => {

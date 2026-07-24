@@ -165,13 +165,13 @@ export function registerDraftTools(
         "local_draft_open",
       );
       await assertToolBlockAllowed("local_draft_open", entry.raw, resolved);
-      await assertToolBlockAllowed("edit", entry.raw, resolved);
+      await assertToolBlockAllowed("api_edit", entry.raw, resolved);
       draft = draftCache.createFromRead(entry, args.expected_raw_hash ?? "");
     } else {
       const request = { asset: args.asset ?? {} };
       await assertToolBlockAllowed("local_draft_open", request, resolved);
       await assertToolBlockAllowed(
-        "create",
+        "api_create",
         request,
         resolved,
       );
@@ -234,7 +234,7 @@ export function registerDraftTools(
     );
     if (entry.rawHash !== args.expected_raw_hash) {
       throw new Error(
-        `expected_raw_hash mismatch for asset handle ${entry.handle}. Re-run read or use the current raw_hash.`,
+        `expected_raw_hash mismatch for asset handle ${entry.handle}. Re-run api_read or use the current raw_hash.`,
       );
     }
 
@@ -248,7 +248,7 @@ export function registerDraftTools(
       { asset: scaffold.asset },
       resolved,
     );
-    await assertToolBlockAllowed("create", { asset: scaffold.asset }, resolved);
+    await assertToolBlockAllowed("api_create", { asset: scaffold.asset }, resolved);
     const draft = draftCache.createFromAsset("create", scaffold.asset);
     const approvalFields = draftApprovalFields(draft, resolved.cascadeUrl);
 
@@ -372,7 +372,7 @@ export function registerDraftTools(
     draft: DraftCacheEntry,
     root: unknown,
   ): Promise<void> {
-    const finalTool = draft.operation === "create" ? "create" : "edit";
+    const finalTool = draft.operation === "create" ? "api_create" : "api_edit";
     await assertToolBlockAllowed(finalTool, root, resolved);
   }
 
@@ -411,7 +411,7 @@ export function registerDraftTools(
       const submittedRevision = draft.revision;
       const submittedHash = draft.draftHash;
       const checkRequest = validation.request as { asset: unknown };
-      const finalTool = draft.operation === "create" ? "create" : "edit";
+      const finalTool = draft.operation === "create" ? "api_create" : "api_edit";
       assertEditTargetUnchanged(draft, checkRequest);
       await assertToolBlockAllowed("local_draft_submit", checkRequest, resolved);
       await assertToolBlockAllowed(finalTool, checkRequest, resolved);
@@ -553,7 +553,7 @@ export function registerDraftTools(
         );
         if (entry.rawHash !== parsed.expected_raw_hash) {
           throw new Error(
-            `expected_raw_hash mismatch for asset handle ${entry.handle}. Re-run read or use the current raw_hash.`,
+            `expected_raw_hash mismatch for asset handle ${entry.handle}. Re-run api_read or use the current raw_hash.`,
           );
         }
         const scaffold = buildCreateAssetScaffoldFromAsset(assetEnvelopeFromRaw(entry.raw), {
@@ -669,7 +669,7 @@ export function registerDraftTools(
     name: "local_draft_open",
     title: "Open asset draft",
     description: buildCascadeToolDescription(
-      `Open a mutable local draft for a create or edit workflow. Edit drafts clone the immutable asset_handle returned by read preview and require expected_raw_hash. Create drafts start from an optional asset envelope. This tool never calls Cascade.`,
+      `Open a mutable local draft for a create or edit workflow. Edit drafts clone the immutable asset_handle returned by api_read preview and require expected_raw_hash. Create drafts start from an optional asset envelope. This tool never calls Cascade.`,
     ),
     inputSchema: DraftOpenRequestSchema,
     annotations: {
@@ -860,7 +860,7 @@ export function registerDraftTools(
     name: "local_draft_apply_patch",
     title: "Apply draft patch",
     description: buildCascadeToolDescription(
-      `Atomically apply JSON Pointer add, replace, and remove operations to a mutable local draft. This mutates only the local draft addressed by draft_handle, never the original asset_handle read cache, and never calls Cascade.`,
+      `Atomically apply JSON Pointer add, replace, and remove operations to a mutable local draft. This mutates only the local draft addressed by draft_handle, never the original asset_handle cache, and never calls Cascade.`,
     ),
     inputSchema: DraftApplyPatchRequestSchema,
     annotations: {
@@ -878,7 +878,7 @@ export function registerDraftTools(
     name: "local_draft_apply_semantic_patch",
     title: "Apply draft semantic patch",
     description: buildCascadeToolDescription(
-      `Resolve one structuredData node by semantic selector, compile the change to JSON Pointer patch operations, then atomically apply it to the mutable local draft. This mutates only the local draft addressed by draft_handle, never the original asset_handle read cache, and never calls Cascade.`,
+      `Resolve one structuredData node by semantic selector, compile the change to JSON Pointer patch operations, then atomically apply it to the mutable local draft. This mutates only the local draft addressed by draft_handle, never the original asset_handle cache, and never calls Cascade.`,
     ),
     inputSchema: DraftApplySemanticPatchRequestSchema,
     annotations: {
@@ -1317,7 +1317,7 @@ function getAssetEntry(
   const entry = assetCache.get(handle);
   if (!entry) {
     throw new Error(
-      `${toolName}: asset handle ${handle} not found. Re-run read to create a fresh asset_handle.`,
+      `${toolName}: asset handle ${handle} not found. Re-run api_read to create a fresh asset_handle.`,
     );
   }
   return entry;
@@ -1667,7 +1667,7 @@ async function assertEditSourceCurrent(
   if (currentHash === draft.sourceRawHash) return;
 
   throw new Error(
-    "Source asset changed after this edit draft was opened. Re-run read and open a fresh draft before submitting.",
+    "Source asset changed after this edit draft was opened. Re-run api_read and open a fresh draft before submitting.",
   );
 }
 
@@ -1691,24 +1691,24 @@ function assertEditTargetUnchanged(
   if (source.id) {
     if (body.id === source.id) return;
     throw new Error(
-      "Edit draft target changed after the draft was opened. Re-run read for the intended asset and open a fresh draft before submitting.",
+      "Edit draft target changed after the draft was opened. Re-run api_read for the intended asset and open a fresh draft before submitting.",
     );
   }
 
   if (!source.path) return;
   if (body.id !== undefined || body.path !== source.path.path) {
     throw new Error(
-      "Edit draft target changed after the draft was opened. Re-run read for the intended asset and open a fresh draft before submitting.",
+      "Edit draft target changed after the draft was opened. Re-run api_read for the intended asset and open a fresh draft before submitting.",
     );
   }
   if (source.path.siteId && body.siteId !== source.path.siteId) {
     throw new Error(
-      "Edit draft target changed after the draft was opened. Re-run read for the intended asset and open a fresh draft before submitting.",
+      "Edit draft target changed after the draft was opened. Re-run api_read for the intended asset and open a fresh draft before submitting.",
     );
   }
   if (source.path.siteName && body.siteName !== source.path.siteName) {
     throw new Error(
-      "Edit draft target changed after the draft was opened. Re-run read for the intended asset and open a fresh draft before submitting.",
+      "Edit draft target changed after the draft was opened. Re-run api_read for the intended asset and open a fresh draft before submitting.",
     );
   }
 }
