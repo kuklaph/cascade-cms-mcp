@@ -1858,7 +1858,26 @@ export type BrowserCheckDraftInput = z.infer<
 >;
 
 /** -------------------------------------------------------------------------
- * 28. BrowserListSnippetsRequest
+ * 28. BrowserListAssetVersionsRequest
+ * ------------------------------------------------------------------------ */
+export const BrowserListAssetVersionsRequestSchema = z
+  .object({
+    asset_id: z
+      .string()
+      .min(1, "asset_id must not be empty")
+      .describe("REQUIRED: Cascade asset ID whose version history to list."),
+    asset_type: EntityTypeSchema.describe(
+      "REQUIRED: Cascade entity type for the asset, used by the browser version-history endpoint.",
+    ),
+  })
+  .strict();
+
+export type BrowserListAssetVersionsInput = z.infer<
+  typeof BrowserListAssetVersionsRequestSchema
+>;
+
+/** -------------------------------------------------------------------------
+ * 29. BrowserListSnippetsRequest
  * ------------------------------------------------------------------------ */
 export const BrowserListSnippetsRequestSchema = z
   .object({
@@ -1871,7 +1890,7 @@ export type BrowserListSnippetsInput = z.infer<
 >;
 
 /** -------------------------------------------------------------------------
- * 29. BrowserCreateSnippetRequest
+ * 30. BrowserCreateSnippetRequest
  * ------------------------------------------------------------------------ */
 export const BrowserCreateSnippetRequestSchema = z
   .object({
@@ -1892,7 +1911,7 @@ export type BrowserCreateSnippetInput = z.infer<
 >;
 
 /** -------------------------------------------------------------------------
- * 30. BrowserUpdateSnippetRequest
+ * 31. BrowserUpdateSnippetRequest
  * ------------------------------------------------------------------------ */
 export const BrowserUpdateSnippetRequestSchema = z
   .object({
@@ -1913,7 +1932,7 @@ export type BrowserUpdateSnippetInput = z.infer<
 >;
 
 /** -------------------------------------------------------------------------
- * 31. BrowserDeleteSnippetsRequest
+ * 32. BrowserDeleteSnippetsRequest
  * ------------------------------------------------------------------------ */
 export const BrowserDeleteSnippetsRequestSchema = z
   .object({
@@ -1931,7 +1950,7 @@ export type BrowserDeleteSnippetsInput = z.infer<
 >;
 
 /** -------------------------------------------------------------------------
- * 32. EditPreferenceRequest
+ * 33. EditPreferenceRequest
  * ------------------------------------------------------------------------ */
 export const EditPreferenceRequestSchema = z
   .object({
@@ -1944,7 +1963,7 @@ export const EditPreferenceRequestSchema = z
 export type EditPreferenceInput = z.infer<typeof EditPreferenceRequestSchema>;
 
 /** -------------------------------------------------------------------------
- * 33. LocalReadCachedResponseRequest — retrieve a cached response slice.
+ * 34. LocalReadCachedResponseRequest — retrieve a cached response slice.
  *
  * This local tool does not call Cascade. Agents call it with a handle produced
  * by an oversized tool response to fetch additional characters.

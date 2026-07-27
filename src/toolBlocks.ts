@@ -201,6 +201,13 @@ function inputMatchesRule(input: unknown, rule: ToolBlockRule): boolean {
     const { value, impliedType } = current;
     if (isRecord(value)) {
       if (objectMatchesRule(value, rule, impliedType)) return true;
+      const flatAssetIdentifier = browserAssetIdentifier(value);
+      if (
+        flatAssetIdentifier &&
+        objectMatchesRule(flatAssetIdentifier, rule, undefined)
+      ) {
+        return true;
+      }
       for (const [key, child] of Object.entries(value)) {
         stack.push({
           value: child,
@@ -213,6 +220,18 @@ function inputMatchesRule(input: unknown, rule: ToolBlockRule): boolean {
   }
 
   return false;
+}
+
+function browserAssetIdentifier(
+  obj: Record<string, unknown>,
+): { id: string; type: string } | undefined {
+  if (
+    typeof obj.asset_id !== "string" ||
+    typeof obj.asset_type !== "string"
+  ) {
+    return undefined;
+  }
+  return { id: obj.asset_id, type: obj.asset_type };
 }
 
 function objectMatchesRule(

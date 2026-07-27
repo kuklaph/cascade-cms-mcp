@@ -4,6 +4,10 @@ All notable changes to `cascade-cms-mcp-server` will be documented here.
 
 ## Unreleased
 
+### Added
+
+- Added `browser_list_asset_versions` to retrieve an asset's complete version history through the authenticated Cascade browser session.
+
 ### Breaking Changes
 
 - Renamed the local cached-response reader from `read_response` to `local_read_cached_response`.
@@ -12,6 +16,7 @@ All notable changes to `cascade-cms-mcp-server` will be documented here.
 ### Changed
 
 - Existing unprefixed and `cascade_*` tool-block rules continue matching renamed `api_*` tools. Generated site protections now store `api_remove` and `api_move`.
+- Asset-specific tool-block rules now recognize the flat `asset_id` and `asset_type` fields used by browser asset tools.
 
 ## 2.1.0 - 2026-07-23
 

@@ -3,6 +3,7 @@ import {
   BrowserCheckDraftRequestSchema,
   BrowserCreateSnippetRequestSchema,
   BrowserDeleteSnippetsRequestSchema,
+  BrowserListAssetVersionsRequestSchema,
   BrowserListSnippetsRequestSchema,
   BrowserLoginRequestSchema,
   BrowserUpdateSnippetRequestSchema,
@@ -46,6 +47,41 @@ Don't use when: the standard Cascade REST/SOAP API tool can perform the operatio
     },
     handler: async (input) => {
       return requireBrowserSession(deps).login({ siteId: input.site_id });
+    },
+  }, deps);
+
+  registerCascadeTool(server, {
+    name: "browser_list_asset_versions",
+    title: "List Browser Asset Versions",
+    description: buildCascadeToolDescription(
+      `List all versions of a Cascade asset from the browser-only version-history endpoint.
+
+${browserSessionRequirement}
+
+Args:
+  - asset_id (string, required): Cascade asset ID whose version history to list.
+  - asset_type (string, required): Cascade entity type for the asset.
+
+Returns:
+  { success: true, asset_id, asset_type, count, status_code, versions }
+
+Each version record is returned unchanged from Cascade and may vary by asset type. This tool returns the complete history without pagination. Oversized responses use the standard cached-response workflow.
+
+Use when: inspecting an asset's version IDs, authors, comments, timestamps, and current-version flags.
+Don't use when: you need to activate, delete, or restore a version; this tool only reads version history. Call standard Cascade API tools for normal asset reads.`,
+    ),
+    inputSchema: BrowserListAssetVersionsRequestSchema,
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
+    handler: async (input) => {
+      return requireBrowserSession(deps).listAssetVersions({
+        assetId: input.asset_id,
+        assetType: input.asset_type,
+      });
     },
   }, deps);
 

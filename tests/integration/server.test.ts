@@ -2,8 +2,8 @@
  * Integration test for the server factory (`createServer`).
  *
  * Verifies that all tool cohorts wire up correctly and produce
- * the expected 68 tools with well-formed names (25 direct Cascade API tools,
- * 14 cached asset follow-up tools, 19 draft workflow tools, 6 browser API tools,
+ * the expected 69 tools with well-formed names (25 direct Cascade API tools,
+ * 14 cached asset follow-up tools, 19 draft workflow tools, 7 browser API tools,
  * and 4 local utilities). Also exercises one
  * end-to-end handler invocation (`read`) through the real
  * pipeline that `registerCascadeTool` installs on the server, plus
@@ -256,7 +256,7 @@ function assetPropertyKeysFromTypes(): string[] {
   return assetPropertyEntriesFromTypes().map((entry) => entry.key).sort();
 }
 
-/** All 68 expected tool names: 25 direct Cascade API tools, 14 cached asset follow-up tools, 19 draft workflow tools, 6 browser API tools, and 4 local utilities. */
+/** All 69 expected tool names: 25 direct Cascade API tools, 14 cached asset follow-up tools, 19 draft workflow tools, 7 browser API tools, and 4 local utilities. */
 const EXPECTED_TOOL_NAMES = [
   // crud and asset follow-ups (20)
   "api_read",
@@ -326,9 +326,10 @@ const EXPECTED_TOOL_NAMES = [
   "api_edit_preference",
   // publish (1)
   "api_publish_unpublish",
-  // browser API (6)
+  // browser API (7)
   "browser_login",
   "browser_check_draft",
+  "browser_list_asset_versions",
   "browser_list_snippets",
   "browser_create_snippet",
   "browser_update_snippet",
@@ -354,13 +355,13 @@ const READ_IMAGE_FILE = {
 } as const;
 
 describe("createServer (server factory)", () => {
-  test("registers exactly 68 tools", async () => {
+  test("registers exactly 69 tools", async () => {
     const client = createMockClient();
     const server = createServer(client, { toolBlockStore: emptyToolBlockStore() });
     const transport = await connectTestTransport(server);
     const tools = await listToolsViaProtocol(transport);
 
-    expect(Object.keys(tools)).toHaveLength(68);
+    expect(Object.keys(tools)).toHaveLength(69);
   });
 
   test("all tool names use snake_case without cascade_ prefix", async () => {
@@ -385,7 +386,7 @@ describe("createServer (server factory)", () => {
     const names = listResult.tools.map((tool: Record<string, any>) => tool.name);
     const unique = new Set(names);
     expect(unique.size).toBe(names.length);
-    expect(unique.size).toBe(68);
+    expect(unique.size).toBe(69);
   });
 
   test("every expected tool from each cohort is present", async () => {
@@ -611,7 +612,7 @@ describe("createServer (server factory)", () => {
     const listResult = await listToolsResultViaProtocol(transport);
 
     expect(Array.isArray(listResult.tools)).toBe(true);
-    expect(listResult.tools).toHaveLength(68);
+    expect(listResult.tools).toHaveLength(69);
     for (const tool of listResult.tools) {
       expect(typeof tool.name).toBe("string");
       expect(tool.inputSchema.type).toBe("object");

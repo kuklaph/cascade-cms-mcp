@@ -5,6 +5,7 @@ import {
   BrowserCheckDraftRequestSchema,
   BrowserCreateSnippetRequestSchema,
   BrowserDeleteSnippetsRequestSchema,
+  BrowserListAssetVersionsRequestSchema,
   BrowserListSnippetsRequestSchema,
   BrowserLoginRequestSchema,
   BrowserUpdateSnippetRequestSchema,
@@ -213,6 +214,125 @@ describe("browser_check_draft tool", () => {
         cookie: "do-not-send-this",
       }).success,
     ).toBe(false);
+  });
+});
+
+describe("browser_list_asset_versions tool", () => {
+  test("lists asset versions through the browser session", async () => {
+    const { server, tools } = makeMockServer();
+    const versions = [
+      {
+        id: "version-1",
+        type: "page",
+        versionComment: null,
+        currentVersion: false,
+        lastModifiedOn: 1700000000000,
+      },
+    ];
+    const browserSession = {
+      listAssetVersions: mock(async (
+        { assetId, assetType }: { assetId: string; assetType: string },
+      ) => ({
+        success: true,
+        asset_id: assetId,
+        asset_type: assetType,
+        count: versions.length,
+        status_code: "OK",
+        versions,
+      })),
+    };
+
+    registerBrowserTools(server as any, {
+      cache: createResponseCache(),
+      browserSession: browserSession as any,
+    });
+
+    const tool = findTool(tools, "browser_list_asset_versions");
+    expect(tool.config.annotations).toMatchObject({
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    });
+    expect(Object.keys(inputJsonSchema(tool.config.inputSchema).properties)).toEqual([
+      "asset_id",
+      "asset_type",
+    ]);
+
+    const result = await tool.handler({
+      asset_id: "asset-123",
+      asset_type: "page",
+    });
+
+    expect(browserSession.listAssetVersions).toHaveBeenCalledWith({
+      assetId: "asset-123",
+      assetType: "page",
+    });
+    expect(result.isError).not.toBe(true);
+    expect(result.structuredContent).toEqual({
+      success: true,
+      asset_id: "asset-123",
+      asset_type: "page",
+      count: 1,
+      status_code: "OK",
+      versions,
+    });
+  });
+
+  test("uses a strict asset identifier schema without pagination or session input", () => {
+    expect(
+      BrowserListAssetVersionsRequestSchema.safeParse({
+        asset_id: "asset-123",
+        asset_type: "block",
+      }).success,
+    ).toBe(true);
+    expect(
+      BrowserListAssetVersionsRequestSchema.safeParse({
+        asset_id: "asset-123",
+      }).success,
+    ).toBe(false);
+    expect(
+      BrowserListAssetVersionsRequestSchema.safeParse({
+        asset_id: "",
+        asset_type: "page",
+      }).success,
+    ).toBe(false);
+    expect(
+      BrowserListAssetVersionsRequestSchema.safeParse({
+        asset_id: "asset-123",
+        asset_type: "unsupported",
+      }).success,
+    ).toBe(false);
+
+    for (const extra of [
+      { cookie: "do-not-send-this" },
+      { limit: 10 },
+      { offset: 5 },
+      { _: 1700000000000 },
+    ]) {
+      expect(
+        BrowserListAssetVersionsRequestSchema.safeParse({
+          asset_id: "asset-123",
+          asset_type: "page",
+          ...extra,
+        }).success,
+      ).toBe(false);
+    }
+  });
+
+  test("returns a configuration error when no browser session is registered", async () => {
+    const { server, tools } = makeMockServer();
+
+    registerBrowserTools(server as any, { cache: createResponseCache() });
+
+    const result = await findTool(tools, "browser_list_asset_versions").handler({
+      asset_id: "asset-123",
+      asset_type: "page",
+    });
+
+    expect(result.isError).toBe(true);
+    expect(firstText(result)).toContain("CASCADE_BROWSER_USERNAME");
+    expect(firstText(result)).toContain("CASCADE_BROWSER_SITE_ID");
   });
 });
 

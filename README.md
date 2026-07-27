@@ -199,6 +199,7 @@ Use this section to decide whether this MCP covers the job. Your MCP client or a
 | Build, inspect, patch, validate, and submit complete create/edit asset drafts                           | Yes       |
 | Authenticate to the Cascade browser UI and cache a browser session                                      | Yes       |
 | Check the browser-only active editing draft notification for an asset                                   | Yes; requires browser API config or prior `browser_login`, plus `asset_id` and `asset_type` |
+| List all browser-only version history records for an asset                                               | Yes; requires browser API config or prior `browser_login`, plus `asset_id` and `asset_type` |
 | List, create, update, and delete browser-admin snippets                                                 | Yes; requires browser API config or prior `browser_login` |
 | Fetch additional characters from large/truncated responses                                              | Yes       |
 | Persist blocked-call rules that prevent matching MCP tool calls from running                            | Yes       |
@@ -247,10 +248,11 @@ Browser-backed read-only tools:
 
 These tools call Cascade browser UI endpoints. They use a cached browser session or log in automatically when browser env values are configured.
 
-| Tool                    | Purpose                                                           |
-| ----------------------- | ----------------------------------------------------------------- |
-| `browser_check_draft`   | Check browser-only active editing draft notification for an asset |
-| `browser_list_snippets` | List browser-admin snippets with pagination                       |
+| Tool                          | Purpose                                                           |
+| ----------------------------- | ----------------------------------------------------------------- |
+| `browser_check_draft`         | Check browser-only active editing draft notification for an asset |
+| `browser_list_asset_versions` | List all version history records for an asset                     |
+| `browser_list_snippets`       | List browser-admin snippets with pagination                       |
 
 Local cache and utility read tools:
 

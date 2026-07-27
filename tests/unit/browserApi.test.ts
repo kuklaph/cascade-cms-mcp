@@ -599,6 +599,122 @@ describe("createBrowserSession", () => {
     expect(session.hasSession()).toBe(true);
   });
 
+  test("lists all asset versions with the authenticated browser session", async () => {
+    const versions = [
+      {
+        id: "version-2",
+        type: "page",
+        versionComment: "Updated content.",
+        currentVersion: true,
+        lastModifiedOn: 1700000000000,
+        lastModifiedBy: {
+          id: "user-2",
+          label: "user-2",
+          isDeleted: false,
+        },
+      },
+      {
+        id: "version-1",
+        type: "page",
+        versionComment: null,
+        currentVersion: false,
+        lastModifiedOn: 1690000000000,
+        extraField: { preserved: true },
+      },
+    ];
+    const { calls, session } = await loggedInSession([
+      response({ json: async () => ({ versions, statusCode: "OK" }) }),
+    ]);
+
+    const result = await session.listAssetVersions({
+      assetId: "asset id&1",
+      assetType: "page",
+    });
+
+    const requestUrl = new URL(calls[3].url);
+    expect(requestUrl.origin + requestUrl.pathname).toBe(
+      "https://example.cascadecms.com/ajax/getAssetVersions.act",
+    );
+    expect(requestUrl.searchParams.get("id")).toBe("asset id&1");
+    expect(requestUrl.searchParams.get("type")).toBe("page");
+    expect(requestUrl.searchParams.get("_")).toMatch(/^\d+$/);
+    expect(calls[3].options.method).toBe("GET");
+    expectMinimalAjaxHeaders(calls[3].options.headers, {
+      accept: "application/json, text/javascript, */*; q=0.01",
+      cookie: "JSESSIONID=init",
+      Referer:
+        "https://example.cascadecms.com/entity/open.act?id=asset%20id%261&type=page&action=versions",
+      "x-requested-with": "XMLHttpRequest",
+    });
+    expect(result).toEqual({
+      success: true,
+      asset_id: "asset id&1",
+      asset_type: "page",
+      count: 2,
+      status_code: "OK",
+      versions,
+    });
+  });
+
+  test("returns an empty asset version history", async () => {
+    const { session } = await loggedInSession([
+      response({ json: async () => ({ versions: [], statusCode: "OK" }) }),
+    ]);
+
+    await expect(
+      session.listAssetVersions({ assetId: "asset-123", assetType: "page" }),
+    ).resolves.toEqual({
+      success: true,
+      asset_id: "asset-123",
+      asset_type: "page",
+      count: 0,
+      status_code: "OK",
+      versions: [],
+    });
+  });
+
+  test("rejects malformed asset version responses", async () => {
+    const malformedResponses = [
+      {},
+      { versions: "not-an-array", statusCode: "OK" },
+      { versions: [null], statusCode: "OK" },
+      { versions: [1], statusCode: "OK" },
+      { versions: [], statusCode: 200 },
+    ];
+
+    for (const body of malformedResponses) {
+      const { session } = await loggedInSession([
+        response({ json: async () => body }),
+      ]);
+
+      await expect(
+        session.listAssetVersions({ assetId: "asset-123", assetType: "page" }),
+      ).rejects.toThrow("Invalid asset versions response");
+    }
+  });
+
+  test("clears the session when listing asset versions gets an auth failure", async () => {
+    const { session } = await loggedInSession([
+      response({ ok: false, status: 401, text: async () => "Unauthorized" }),
+    ]);
+
+    await expect(
+      session.listAssetVersions({ assetId: "asset-123", assetType: "page" }),
+    ).rejects.toThrow("Browser session expired");
+    expect(session.hasSession()).toBe(false);
+  });
+
+  test("surfaces non-auth asset version failures without clearing the session", async () => {
+    const { session } = await loggedInSession([
+      response({ ok: false, status: 500, text: async () => "Server error" }),
+    ]);
+
+    await expect(
+      session.listAssetVersions({ assetId: "asset-123", assetType: "page" }),
+    ).rejects.toThrow("List asset versions failed with HTTP 500: Server error");
+    expect(session.hasSession()).toBe(true);
+  });
+
   test("lists snippets with the authenticated browser session and minimal headers", async () => {
     const snippets = [
       {

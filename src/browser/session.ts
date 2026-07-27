@@ -1,5 +1,6 @@
 import type { Config } from "../config.js";
 import { OperationLimiter } from "../operationLimiter.js";
+import { listAssetVersions } from "./assetVersions.js";
 import { checkDraft } from "./checkDraft.js";
 import {
   browserBaseUrlFromApiUrl,
@@ -25,6 +26,7 @@ import type {
   BrowserCheckDraftResult,
   BrowserDeleteSnippetsResult,
   BrowserFetch,
+  BrowserListAssetVersionsResult,
   BrowserListSnippetsResult,
   BrowserLoginResult,
   BrowserSession,
@@ -121,6 +123,16 @@ class BrowserApiSession implements BrowserSession {
     return this.runWithSession(
       () => checkDraft(this.context(), args),
       "Browser session expired. Run browser_login, then retry browser_check_draft.",
+    );
+  }
+
+  async listAssetVersions(args: {
+    assetId: string;
+    assetType: string;
+  }): Promise<BrowserListAssetVersionsResult> {
+    return this.runWithSession(
+      () => listAssetVersions(this.context(), args),
+      "Browser session expired. Run browser_login, then retry browser_list_asset_versions.",
     );
   }
 

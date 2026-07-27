@@ -37,6 +37,17 @@ export type BrowserCheckDraftResult = {
   message?: string;
 };
 
+export type BrowserAssetVersion = Record<string, unknown>;
+
+export type BrowserListAssetVersionsResult = {
+  success: true;
+  asset_id: string;
+  asset_type: string;
+  count: number;
+  status_code: string;
+  versions: BrowserAssetVersion[];
+};
+
 export type BrowserSnippet = Record<string, unknown>;
 
 export type BrowserListSnippetsResult = {
@@ -66,6 +77,10 @@ export interface BrowserSession {
     assetId: string;
     assetType: string;
   }): Promise<BrowserCheckDraftResult>;
+  listAssetVersions(args: {
+    assetId: string;
+    assetType: string;
+  }): Promise<BrowserListAssetVersionsResult>;
   listSnippets(args: {
     limit: number;
     offset: number;

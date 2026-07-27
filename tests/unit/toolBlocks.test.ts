@@ -175,6 +175,59 @@ const DIRECT_REST_TOOL_NAMES = [
 ] as const;
 
 describe("findDeniedToolCall", () => {
+  test("matches flat browser asset fields against explicit and URL selectors", () => {
+    const explicitRule = {
+      type: "page" as const,
+      id: "page-1",
+      tools: ["browser_check_draft"],
+    };
+    const urlRule = {
+      url: "https://tenant.cascadecms.com/entity/open.act?id=block-1&type=block",
+      tools: ["browser_list_asset_versions"],
+    };
+
+    expect(
+      findDeniedToolCall(
+        "browser_check_draft",
+        { asset_id: "page-1", asset_type: "page" },
+        [explicitRule],
+      ),
+    ).toBe(explicitRule);
+    expect(
+      findDeniedToolCall(
+        "browser_list_asset_versions",
+        {
+          asset_id: "block-1",
+          asset_type: "block_XHTML_DATADEFINITION",
+        },
+        [urlRule],
+      ),
+    ).toBe(urlRule);
+  });
+
+  test("does not combine or partially match flat browser asset fields", () => {
+    const rule = {
+      type: "page" as const,
+      id: "page-1",
+      tools: ["browser_list_asset_versions"],
+    };
+
+    for (const input of [
+      { asset_id: "page-2", asset_type: "page" },
+      { asset_id: "page-1", asset_type: "folder" },
+      { asset_id: "page-1" },
+      { asset_type: "page" },
+      {
+        target: { asset_id: "page-1" },
+        context: { asset_type: "page" },
+      },
+    ]) {
+      expect(
+        findDeniedToolCall("browser_list_asset_versions", input, [rule]),
+      ).toBeUndefined();
+    }
+  });
+
   test("matches a blocked current REST tool by URL-derived id and type", () => {
     const denied = findDeniedToolCall(
       "api_edit",
