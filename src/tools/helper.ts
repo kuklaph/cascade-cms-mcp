@@ -168,7 +168,7 @@ export function registerCascadeTool<TSchema extends z.ZodTypeAny>(
  */
 export function buildCascadeToolDescription(base: string): string {
   const footer =
-    "Most responses include JSON text; structuredContent is authoritative when the response fits. Multimodal helpers may return only image content; call file_data_info separately for file metadata. Oversized responses return bounded _cache metadata for local_read_cached_response. For api_read, read_mode controls preview versus raw Cascade payload shape.";
+    "Most responses include JSON text; structuredContent is authoritative when the response fits. Multimodal helpers may return only image content; call file_data_info separately for file metadata. Oversized responses return bounded _cache metadata for local_read_cached_response. For api_read, preview is the primary mode; use raw only when preview or cached inspection cannot provide what you need.";
   const trimmed = base.trim();
   const separator = trimmed.endsWith(".") ? " " : ". ";
   return `${trimmed}${separator}${footer}`;

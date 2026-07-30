@@ -462,7 +462,24 @@ describe("createServer (server factory)", () => {
     const readResult = await callToolViaProtocol(transport, "api_read", {
       identifier: { id: "file123", type: "file" },
     });
-    const handle = (readResult.structuredContent as Record<string, any>).asset_handle;
+    const readStructured = readResult.structuredContent as Record<string, any>;
+    expect(readStructured.asset_identity).toEqual(
+      expect.objectContaining({
+        id: "file123",
+        name: "hero.jpg",
+        path: "/_files/hero.jpg",
+        type: "file",
+      }),
+    );
+    expect(readStructured.binary_fields).toEqual([
+      expect.objectContaining({
+        detected_kind: "jpeg",
+        mime_type: "image/jpeg",
+        mime_source: "magic",
+      }),
+    ]);
+
+    const handle = readStructured.asset_handle;
     const imageResult = await callToolViaProtocol(transport, "file_data_image", {
       asset_handle: handle,
     });
@@ -659,6 +676,24 @@ describe("createServer (server factory)", () => {
     expect(readSchema.required).toContain("identifier");
     expect(readSchema.properties.read_mode.default).toBe("preview");
     expect(JSON.stringify(readSchema.properties.read_mode)).toContain("raw");
+    expect(readSchema.properties.read_mode.description).toContain(
+      "Primary mode for most reads",
+    );
+    expect(readSchema.properties.read_mode.description).toContain(
+      "preview or cached inspection cannot provide",
+    );
+    expect(tools["api_read"].description).toContain(
+      "Use preview first for routine asset inspection",
+    );
+    expect(tools["api_read"].description).toContain(
+      "identity, name, path, site, and file MIME metadata",
+    );
+    expect(tools["api_read"].description).toContain("binary_fields?:");
+    expect(tools["api_read"].description).toContain("preview indexing limits");
+    expect(tools["api_read"].description).toContain(
+      'Use when: "Inspect a folder"',
+    );
+    expect(tools["api_read"].description).not.toContain("Load folder config");
 
     expect(schemaTypes(createSchema.properties.asset)).toContain("object");
     expect(schemaTypes(editSchema.properties.asset)).toContain("object");

@@ -41,6 +41,9 @@ describe("api_list_sites tool", () => {
     expect(tool.config.annotations.destructiveHint).toBe(false);
     expect(tool.config.annotations.idempotentHint).toBe(true);
     expect(tool.config.annotations.openWorldHint).toBe(true);
+    expect(tool.config.description).toContain("primary preview");
+    expect(tool.config.description).toContain("cached follow-up tools");
+    expect(tool.config.description).not.toContain("full configuration");
 
     const result = await tool.handler({});
 

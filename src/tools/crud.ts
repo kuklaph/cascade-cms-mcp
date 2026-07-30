@@ -362,7 +362,7 @@ function registerAssetFollowUpTools(
     name: "file_data_info",
     title: "Inspect Cascade file data",
     description: buildCascadeToolDescription(
-      `Inspect binary data for a Cascade file asset without dumping the raw byte array. Use asset_handle after api_read preview, or identifier for a direct file read that creates a fresh asset_handle for follow-up calls.`,
+      `Inspect binary data for a Cascade file asset without dumping the raw byte array. api_read preview already returns routine file identity and MIME metadata. Use this tool for targeted binary details with an asset_handle, or use identifier for a direct file read that creates a fresh asset_handle for follow-up calls.`,
     ),
     inputSchema: FileDataInfoRequestSchema,
     annotations: {
@@ -668,7 +668,7 @@ export function registerCrudTools(
     description: buildCascadeToolDescription(
       `Read an asset from Cascade CMS by identifier.
 
-Default preview mode returns a compact browse-oriented asset_handle, asset identity, raw_hash, index_version, fact/reference counts, node counts, root nodelet outline, and raw_resource_uri. Preview is not audit-complete; use asset_list_facts, asset_search_values, asset_search_keys, asset_get_value, asset_list_scalar_artifacts, asset_list_references, asset_list_nodelets, asset_get_nodelet, asset_resolve_nodes, and asset_assert_values with the returned asset_handle for follow-up inspection. Use read_mode: "raw" only when the full REST payload is required.
+Use preview first for routine asset inspection. Default preview mode returns a compact asset_handle; identity, name, path, site, and file MIME metadata when available; raw_hash; index_version; fact/reference counts; node counts; a root nodelet outline; and raw_resource_uri. For fields omitted from the compact response, use asset_list_facts, asset_search_values, asset_search_keys, asset_get_value, asset_list_scalar_artifacts, asset_list_references, asset_list_nodelets, asset_get_nodelet, asset_resolve_nodes, or asset_assert_values with the returned asset_handle. Use read_mode: "raw" only when preview or cached inspection cannot provide what you need, including when an exact REST field is unavailable or preview indexing limits are exceeded.
 
 Args:
   - identifier (object, required): The asset to read
@@ -679,18 +679,18 @@ Args:
     - type (string, required): Entity type — one of the 56 EntityTypeString values (page, file, folder, block, template, etc.)
     - recycled (boolean, optional): Read from recycle bin.
     - requires type plus either id or path; prefer id when known
-  - read_mode (string, optional): 'preview' (default, compact handle-based output) or 'raw' (full REST payload; expensive for structured assets).
+  - read_mode (string, optional): 'preview' (default and primary mode) or 'raw' (fallback when preview or cached inspection cannot provide what you need; expensive for structured assets).
 Returns:
   Preview mode:
-  { asset_handle, asset_type, asset_identity, raw_resource_uri, raw_hash, index_version, audit_complete: false, total_fact_count, reference_count, node_count, max_depth, root_outline, omitted_fields, warnings, next_actions }
+  { asset_handle, asset_type, asset_identity, raw_resource_uri, raw_hash, index_version, audit_complete: false, total_fact_count, reference_count, node_count, max_depth, root_outline, omitted_fields, binary_fields?: [ { pointer, bytes_total, sha256, detected_kind, mime_type, mime_source, byte_preview_hex } ], warnings, next_actions }
   Raw mode:
   { success: true, asset: { <type>: { ...type-specific representation } } }
   On failure: { success: false, message: "Asset not found" }
 
 Examples:
   - Use when: "Read the homepage" -> { identifier: { type: "page", path: { path: "/", siteName: "www" } } }
-  - Use when: "Get file by ID" -> { identifier: { type: "file", id: "abc123..." } }
-  - Use when: "Load folder config" -> { identifier: { type: "folder", path: { path: "/about", siteName: "www" } } }
+  - Use when: "Get a file's identity, filename, path, site, or MIME metadata" -> { identifier: { type: "file", id: "abc123..." } } (preview is sufficient)
+  - Use when: "Inspect a folder" -> { identifier: { type: "folder", path: { path: "/about", siteName: "www" } } }; use cached follow-up tools for configuration fields omitted from preview.
   - Don't use when: You already have a complete edit payload — use api_edit instead.
   - Use when: You need a cached starting point for draft editing — api_read preview, then use local_draft_open.
   - Don't use when: You want to check access rights — use api_read_access_rights.

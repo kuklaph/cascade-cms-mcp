@@ -511,6 +511,8 @@ describe("asset nodelet index", () => {
           id: "image-id",
           name: "hero.jpg",
           path: "/_files/hero.jpg",
+          siteName: "example-site",
+          siteId: "site-123",
           type: "file",
           data,
         },
@@ -525,6 +527,16 @@ describe("asset nodelet index", () => {
     expect(index.rawFacts.some((fact) => fact.pointer === "/asset/file/data")).toBe(true);
     expect(index.rawFacts.some((fact) => fact.pointer === "/asset/file/data/0")).toBe(false);
     expect(preview.omitted_fields).toContain("data");
+    expect(preview.asset_identity).toEqual(
+      expect.objectContaining({
+        id: "image-id",
+        name: "hero.jpg",
+        path: "/_files/hero.jpg",
+        siteName: "example-site",
+        siteId: "site-123",
+        type: "file",
+      }),
+    );
     expect(preview.binary_fields).toBeDefined();
     expect(preview.binary_fields!).toEqual([
       expect.objectContaining({
@@ -537,6 +549,7 @@ describe("asset nodelet index", () => {
       }),
     ]);
     expect(preview.binary_fields![0]!.sha256).toMatch(/^[0-9a-f]{64}$/);
+    expect(preview.warnings).toEqual([]);
     expect(preview.next_actions.map((action) => action.tool)).toEqual(
       expect.arrayContaining([
         "file_data_info",

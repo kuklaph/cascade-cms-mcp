@@ -57,6 +57,9 @@ describe("api_list_subscribers tool", () => {
     expect(tool.config.annotations.destructiveHint).toBe(false);
     expect(tool.config.annotations.idempotentHint).toBe(true);
     expect(tool.config.annotations.openWorldHint).toBe(true);
+    expect(tool.config.description).toContain("api_read preview");
+    expect(tool.config.description).toContain("asset_search_values");
+    expect(tool.config.description).toContain("asset_get_value");
 
     const result = await tool.handler({
       identifier: ID_PAGE,

@@ -225,12 +225,7 @@ export function toAssetPreview(index: IndexedAsset): AssetPreview {
     0,
     index.rootPointers.length - ROOT_OUTLINE_LIMIT,
   );
-  const warnings =
-    index.nodeCount === 0
-      ? [
-          "No structuredData. Use read_mode: \"raw\" or the raw resource for the full asset.",
-        ]
-      : [];
+  const warnings: string[] = [];
   if (omittedRoots > 0) {
     warnings.push(
       `${omittedRoots} root nodelets omitted from root_outline. Use asset_list_nodelets with pointer "" to page through all roots.`,

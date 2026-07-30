@@ -217,7 +217,7 @@ Most tool responses put JSON text in `content[0]`. When present, `structuredCont
 
 Oversized responses return bounded `_cache` metadata. Use `local_read_cached_response` with that handle to page through the full serialized response. `characters_total`, `characters_returned`, and offsets use JavaScript UTF-16 code units. `bytes_total` and `bytes_returned` remain as deprecated compatibility aliases and are not byte counts. Handles are process-scoped and may be evicted after later calls.
 
-`api_read` returns a compact preview plus an `asset_handle` by default. Use `read_mode: "raw"` only when you need the full Cascade payload immediately. Follow-up tools inspect cached data and do not call Cascade again.
+`api_read` uses preview as its primary mode. Preview returns routine asset identity, file MIME metadata when available, and an `asset_handle` for targeted inspection. Use `read_mode: "raw"` only when preview or cached inspection cannot provide what you need, including when an exact REST field is unavailable or preview indexing limits are exceeded. Follow-up tools inspect cached data and do not call Cascade again.
 
 `file_data_image` returns image-only MCP content. Call `file_data_info` separately for JSON metadata.
 

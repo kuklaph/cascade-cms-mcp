@@ -65,7 +65,7 @@ Examples:
   - Use when: "What relationships does this block have?" / "Which pages use this block?" -> { identifier: { type: "block_XHTML_DATADEFINITION", id: "<blockId>" } } then inspect response entries.
   - Use when: "Which assets link to this file?" -> { identifier: { type: "file", id: "<fileId>" } }.
   - Use when: "Who gets notified when /about changes?" -> { identifier: { type: "folder", path: { path: "/about", siteName: "www" } } }.
-  - Don't use when: You want outbound relationships — i.e. "which blocks does this page embed?". That direction isn't queryable; use api_read and inspect the page body.
+  - Don't use when: You want outbound relationships — i.e. "which blocks does this page embed?". That direction isn't queryable; use api_read preview, then inspect the cached page body with asset_search_values or asset_get_value.
   - Don't use when: You want to read messages sent — use api_list_messages.
 
 Error Handling:

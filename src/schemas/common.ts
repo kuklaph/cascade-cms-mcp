@@ -182,7 +182,7 @@ export const ReadModeSchema = z
   .enum(["preview", "raw"])
   .default("preview")
   .describe(
-    "Read mode for api_read. 'preview' (default) returns a compact asset_handle plus nodelet outline for structured assets. 'raw' returns the full Cascade REST payload and can be expensive for pages or data-definition blocks.",
+    "Primary mode for most reads. 'preview' (default) returns a compact asset_handle, routine asset identity, file MIME metadata when available, and a nodelet outline for structured assets. Use 'raw' only when preview or cached inspection cannot provide what you need, including when an exact REST field is unavailable or preview indexing limits are exceeded; raw returns the full Cascade payload and can be expensive for pages or data-definition blocks.",
   );
 
 export type ReadMode = z.infer<typeof ReadModeSchema>;
