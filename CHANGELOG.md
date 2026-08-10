@@ -4,6 +4,8 @@ All notable changes to `cascade-cms-mcp-server` will be documented here.
 
 ## Unreleased
 
+## 3.0.0 - 2026-08-10
+
 ### Added
 
 - Added `browser_list_asset_versions` to retrieve an asset's complete version history through the authenticated Cascade browser session.
