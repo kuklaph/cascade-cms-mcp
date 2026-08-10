@@ -234,14 +234,21 @@ const AuditTypeSchema = z.enum([
 
 const AuditParametersSchema = z
   .object({
-    identifier: IdentifierSchema.optional().describe(
-      "Filter events to a specific Cascade asset.",
-    ),
     username: z.string().optional().describe("Filter audits by username."),
     groupname: z.string().optional().describe("Filter audits by group name."),
     rolename: z.string().optional().describe("Filter audits by role name."),
-    startDate: z.string().optional().describe("Earliest audit event timestamp."),
-    endDate: z.string().optional().describe("Latest audit event timestamp."),
+    startDate: z
+      .string()
+      .optional()
+      .describe(
+        "Earliest audit event in Cascade's textual date format, for example `Jul 1, 2026 12:00:00 AM`. Do not use ISO 8601.",
+      ),
+    endDate: z
+      .string()
+      .optional()
+      .describe(
+        "Latest audit event in Cascade's textual date format, for example `Aug 5, 2026 11:59:59 PM`. Do not use ISO 8601.",
+      ),
     auditType: AuditTypeSchema.optional().describe("Audit action type filter."),
   })
   .strict()
@@ -1725,12 +1732,46 @@ export type CheckInInput = z.infer<typeof CheckInRequestSchema>;
  * ------------------------------------------------------------------------ */
 export const ReadAuditsRequestSchema = z
   .object({
-    auditParameters: AuditParametersSchema.describe(
-      "REQUIRED: Audit filters (identifier, username, groupname, rolename, auditType, start/end dates). Matches Cascade's AuditParameters shape.",
+    identifier: IdentifierSchema.optional().describe(
+      "Asset whose audits to read. Required unless auditParameters includes username, groupname, or rolename.",
+    ),
+    auditParameters: AuditParametersSchema.optional().describe(
+      "Audit filters or a user, group, or role target. When identifier is omitted, include username, groupname, or rolename.",
     ),
     ...PaginationFields,
   })
-  .strict();
+  .strict()
+  .superRefine((value, ctx) => {
+    const parameters = value.auditParameters;
+    const hasNamedTarget = parameters
+      && [parameters.username, parameters.groupname, parameters.rolename]
+        .some((target) => target !== undefined);
+    if (!value.identifier && !hasNamedTarget) {
+      ctx.addIssue({
+        code: "custom",
+        message:
+          "Provide a top-level asset identifier or auditParameters.username, groupname, or rolename.",
+        path: ["identifier"],
+      });
+    }
+  })
+  .meta({
+    anyOf: [
+      { required: ["identifier"] },
+      {
+        required: ["auditParameters"],
+        properties: {
+          auditParameters: {
+            anyOf: [
+              { required: ["username"] },
+              { required: ["groupname"] },
+              { required: ["rolename"] },
+            ],
+          },
+        },
+      },
+    ],
+  });
 
 export type ReadAuditsInput = z.infer<typeof ReadAuditsRequestSchema>;
 

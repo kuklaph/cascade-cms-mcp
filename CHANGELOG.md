@@ -12,16 +12,19 @@ All notable changes to `cascade-cms-mcp-server` will be documented here.
 
 - Renamed the local cached-response reader from `read_response` to `local_read_cached_response`.
 - Prefixed all 25 direct Cascade REST tools with `api_`; for example, `read`, `edit`, and `list_sites` are now `api_read`, `api_edit`, and `api_list_sites`.
+- Asset-targeted `api_read_audits` calls must move `identifier` from `auditParameters.identifier` to the request's top-level `identifier` field.
 
 ### Changed
 
 - Existing unprefixed and `cascade_*` tool-block rules continue matching renamed `api_*` tools. Generated site protections now store `api_remove` and `api_move`.
 - Asset-specific tool-block rules now recognize the flat `asset_id` and `asset_type` fields used by browser asset tools.
 - Made `api_read` preview the primary read path and reserved raw mode for cases where preview or cached inspection cannot provide the required data.
+- Updated `cascade-cms-api` to `^2.1.0`, whose published audit request types match the corrected REST contract.
 
 ### Fixed
 
 - Removed the preview warning that recommended raw mode solely because an asset had no `structuredData`.
+- Corrected `api_read_audits` to accept asset identifiers at the request top level, require an asset/user/group/role target, and document Cascade's textual audit-date format.
 
 ## 2.1.0 - 2026-07-23
 

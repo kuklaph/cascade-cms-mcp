@@ -22,8 +22,8 @@ import { OK_RESULT } from "../../fixtures/cascade-responses.js";
 const AUDITS_OK = {
   success: true,
   audits: [
-    { action: "login", userName: "jdoe" },
-    { action: "edit", userName: "asmith" },
+    { action: "login", userName: "sample-user-1" },
+    { action: "edit", userName: "sample-user-2" },
   ],
 } as const;
 
@@ -54,19 +54,27 @@ describe("api_read_audits tool", () => {
     expect(tool.config.annotations.idempotentHint).toBe(true);
     expect(tool.config.annotations.openWorldHint).toBe(true);
 
+    const identifier = {
+      type: "page",
+      id: "asset-123",
+    };
     const auditParameters = {
-      username: "jdoe",
-      auditType: "login",
-      startDate: "2025-01-01",
-      endDate: "2025-01-31",
+      auditType: "edit",
+      startDate: "Jul 1, 2026 12:00:00 AM",
+      endDate: "Aug 5, 2026 11:59:59 PM",
     };
     const result = await tool.handler({
+      identifier,
       auditParameters,
+      limit: 25,
+      offset: 0,
     });
 
     expect(client.readAudits).toHaveBeenCalledTimes(1);
-    // Library receives auditParameters only — pagination fields stripped.
-    expect(client.readAudits.mock.calls[0][0]).toEqual({ auditParameters });
+    expect(client.readAudits.mock.calls[0][0]).toEqual({
+      identifier,
+      auditParameters,
+    });
     expect(result.isError).not.toBe(true);
 
     const sc = result.structuredContent as Record<string, unknown>;
@@ -87,9 +95,10 @@ describe("api_read_audits tool", () => {
     registerAuditTools(server as any, client);
     const tool = findTool(tools, "api_read_audits");
 
-    const result = await tool.handler({ auditParameters: {} });
+    const auditParameters = { username: "sample-user" };
+    const result = await tool.handler({ auditParameters });
 
-    expect(client.readAudits.mock.calls[0][0]).toEqual({ auditParameters: {} });
+    expect(client.readAudits.mock.calls[0][0]).toEqual({ auditParameters });
     const sc = result.structuredContent as Record<string, unknown>;
     expect(sc.offset).toBe(0);
     expect(sc.count).toBe(AUDITS_OK.audits.length);
@@ -112,7 +121,7 @@ describe("api_read_audits tool", () => {
     const tool = findTool(tools, "api_read_audits");
 
     const result = await tool.handler({
-      auditParameters: {},
+      auditParameters: { groupname: "sample-group" },
       limit: 3,
       offset: 1,
     });
@@ -126,9 +135,30 @@ describe("api_read_audits tool", () => {
     expect(sc.next_offset).toBe(4);
   });
 
-  test("schema validation: rejects missing auditParameters", () => {
-    const parsed = ReadAuditsRequestSchema.safeParse({});
+  test("schema validation: accepts an asset target without auditParameters", () => {
+    const parsed = ReadAuditsRequestSchema.safeParse({
+      identifier: { type: "page", id: "asset-123" },
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  test("schema validation: rejects filters without a target", () => {
+    const parsed = ReadAuditsRequestSchema.safeParse({
+      auditParameters: { auditType: "edit" },
+    });
     expect(parsed.success).toBe(false);
+  });
+
+  test("description documents the REST-specific target and date shapes", () => {
+    const { server, tools } = makeMockServer();
+    const client = createMockClient();
+
+    registerAuditTools(server as any, client);
+    const description = findTool(tools, "api_read_audits").config.description;
+
+    expect(description).toContain("top-level");
+    expect(description).toContain("Jul 1, 2026 12:00:00 AM");
+    expect(description).not.toContain("2026-04-13T00:00:00Z");
   });
 
   test("library throws: returns isError result via translateError", async () => {
@@ -142,7 +172,9 @@ describe("api_read_audits tool", () => {
     registerAuditTools(server as any, client);
     const tool = findTool(tools, "api_read_audits");
 
-    const result = await tool.handler({ auditParameters: {} });
+    const result = await tool.handler({
+      auditParameters: { rolename: "sample-role" },
+    });
 
     expect(result.isError).toBe(true);
     const text = firstText(result);

@@ -35,16 +35,16 @@ export function registerAuditTools(
     description: buildCascadeToolDescription(
       `Read Cascade audit log entries matching the specified filters.
 
-Queries Cascade's system audit log for events like edits, publishes, logins, check-outs, deletes, and workflow transitions. All auditParameters fields are optional — providing none returns every recorded event (expect large volumes; always apply a date range filter). Results are always returned newest-first by Cascade; this MCP layer then slices the page.
+Queries Cascade's system audit log for events like edits, publishes, logins, check-outs, deletes, and workflow transitions. Provide at least one target: a top-level asset identifier or username, groupname, or rolename inside auditParameters. Additional audit filters are optional. Results are always returned newest-first by Cascade; this MCP layer then slices the page.
 
 Args:
-  - auditParameters (object, required): Filter conditions matching cascade-cms-api AuditParameters
-    - identifier (object, optional): Limit to events on a specific asset
+  - identifier (object, optional): Top-level asset target. Required unless auditParameters contains username, groupname, or rolename
+  - auditParameters (object, optional): Audit filters or a user, group, or role target
     - username (string, optional): Limit to events by a specific user
     - groupname (string, optional): Limit to events by users in a group
     - rolename (string, optional): Limit to events by users with a role
-    - startDate (string, optional): ISO-ish date; earliest event to include
-    - endDate (string, optional): ISO-ish date; latest event to include
+    - startDate (string, optional): Cascade textual date; earliest event to include, for example "Jul 1, 2026 12:00:00 AM". Do not use ISO 8601
+    - endDate (string, optional): Cascade textual date; latest event to include, for example "Aug 5, 2026 11:59:59 PM". Do not use ISO 8601
     - auditType (string, optional): One of: "login", "login_failed", "logout", "start_workflow", "advance_workflow", "edit", "copy", "create", "reference", "delete", "delete_unpublish", "check_in", "check_out", "activate_version", "publish", "unpublish", "recycle", "restore", "move"
   - limit (number, optional): Max results per page, 1-500 (default 50)
   - offset (number, optional): Skip N results for pagination (default 0)
@@ -66,8 +66,8 @@ Returns:
   On failure: { success: false, message: "<error>" }
 
 Examples:
-  - Use when: "Who edited /about today?" -> { auditParameters: { identifier: { type: "folder", path: { path: "/about", siteName: "www" } }, auditType: "edit", startDate: "2026-04-13T00:00:00Z" } }
-  - Use when: "All logins in April 2026" -> { auditParameters: { auditType: "login", startDate: "2026-04-01T00:00:00Z", endDate: "2026-04-30T23:59:59Z" } }
+  - Use when: "Who edited /about in July?" -> { identifier: { type: "folder", path: { path: "/about", siteName: "site-123" } }, auditParameters: { auditType: "edit", startDate: "Jul 1, 2026 12:00:00 AM", endDate: "Jul 31, 2026 11:59:59 PM" } }
+  - Use when: "Login activity for a user in July" -> { auditParameters: { username: "sample-user", auditType: "login", startDate: "Jul 1, 2026 12:00:00 AM", endDate: "Jul 31, 2026 11:59:59 PM" } }
   - Don't use when: You want the current state — use api_read.
   - Don't use when: You want user inbox messages — use api_list_messages.
 
@@ -90,7 +90,7 @@ Error Handling:
       openWorldHint: true,
     },
     handler: paginatedHandler(
-      (req) => client.readAudits(req as unknown as Types.ReadAuditsRequest),
+      (req) => client.readAudits(req as Types.ReadAuditsRequest),
       "audits",
     ),
   }, deps);

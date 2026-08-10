@@ -485,7 +485,19 @@ describe("CheckInRequestSchema", () => {
 });
 
 describe("ReadAuditsRequestSchema", () => {
-  test("should accept a valid read audits request with strict auditParameters", () => {
+  test("should accept an asset target at the request top level", () => {
+    const res = ReadAuditsRequestSchema.safeParse({
+      identifier: ID_PAGE,
+      auditParameters: {
+        auditType: "edit",
+        startDate: "Jul 1, 2026 12:00:00 AM",
+        endDate: "Aug 5, 2026 11:59:59 PM",
+      },
+    });
+    expect(res.success).toBe(true);
+  });
+
+  test("should accept a named target inside auditParameters", () => {
     const res = ReadAuditsRequestSchema.safeParse({
       auditParameters: {
         username: "alice",
@@ -500,6 +512,25 @@ describe("ReadAuditsRequestSchema", () => {
       auditParameters: {
         username: "alice",
         action: "login",
+      },
+    });
+    expect(res.success).toBe(false);
+  });
+
+  test("should reject an asset identifier inside auditParameters", () => {
+    const res = ReadAuditsRequestSchema.safeParse({
+      auditParameters: {
+        identifier: ID_PAGE,
+      },
+    });
+    expect(res.success).toBe(false);
+  });
+
+  test("should reject filters without an asset, user, group, or role target", () => {
+    const res = ReadAuditsRequestSchema.safeParse({
+      auditParameters: {
+        auditType: "edit",
+        startDate: "Jul 1, 2026 12:00:00 AM",
       },
     });
     expect(res.success).toBe(false);
@@ -906,9 +937,8 @@ describe("Generated request body schemas", () => {
   test("ReadAuditsRequestSchema should validate auditParameters fields", () => {
     expect(
       ReadAuditsRequestSchema.safeParse({
+        identifier: ID_PAGE,
         auditParameters: {
-          identifier: ID_PAGE,
-          username: "alice",
           auditType: "publish",
         },
       }).success,
@@ -927,14 +957,14 @@ describe("Generated request body schemas", () => {
     for (const auditType of stringUnionFromTypes("AuditTypes")) {
       expect(
         ReadAuditsRequestSchema.safeParse({
-          auditParameters: { auditType },
+          auditParameters: { username: "sample-user", auditType },
         }).success,
       ).toBe(true);
     }
 
     expect(
       ReadAuditsRequestSchema.safeParse({
-        auditParameters: { auditType: "archive" },
+        auditParameters: { username: "sample-user", auditType: "archive" },
       }).success,
     ).toBe(false);
   });

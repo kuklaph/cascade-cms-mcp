@@ -634,6 +634,7 @@ describe("createServer (server factory)", () => {
       expect(typeof tool.name).toBe("string");
       expect(tool.inputSchema.type).toBe("object");
       for (const keyword of ["anyOf", "oneOf", "allOf", "enum", "not"]) {
+        if (tool.name === "api_read_audits" && keyword === "anyOf") continue;
         expect(Object.hasOwn(tool.inputSchema, keyword)).toBe(false);
       }
       assertStrictObjectBranches(tool.inputSchema);
@@ -859,12 +860,36 @@ describe("createServer (server factory)", () => {
       transitionSchema.properties.workflowTransitionInformation.required,
     ).toEqual(expect.arrayContaining(["workflowId", "actionIdentifier"]));
 
-    expect(auditSchema.required).toContain("auditParameters");
-    expect(auditSchema.properties.auditParameters.type).toBe("object");
-    expect(
-      auditSchema.properties.auditParameters.properties.rolename.type,
-    ).toBe("string");
-    expect(auditSchema.properties.auditParameters.properties.role).toBeUndefined();
+    expect(schemaTypes(auditSchema.properties.identifier)).toContain("object");
+    expect(schemaHasRequiredBranch(auditSchema.properties.identifier, "id")).toBe(true);
+    expect(schemaHasRequiredBranch(auditSchema.properties.identifier, "path")).toBe(true);
+    expect(auditSchema.required ?? []).not.toContain("identifier");
+    expect(auditSchema.required ?? []).not.toContain("auditParameters");
+    expect(auditSchema.anyOf).toEqual([
+      { required: ["identifier"] },
+      {
+        required: ["auditParameters"],
+        properties: {
+          auditParameters: {
+            anyOf: [
+              { required: ["username"] },
+              { required: ["groupname"] },
+              { required: ["rolename"] },
+            ],
+          },
+        },
+      },
+    ]);
+    const auditParametersSchema = JSON.stringify(
+      auditSchema.properties.auditParameters,
+    );
+    expect(auditParametersSchema).toContain('"rolename"');
+    expect(auditParametersSchema).not.toContain('"identifier"');
+    expect(auditParametersSchema).toContain("Jul 1, 2026 12:00:00 AM");
+    expect(auditParametersSchema).toContain("Aug 5, 2026 11:59:59 PM");
+    expect(tools["api_read_audits"].description).toContain(
+      "top-level asset identifier",
+    );
 
     expect(preferenceSchema.required).toContain("preference");
     expect(preferenceSchema.properties.preference.type).toBe("object");
