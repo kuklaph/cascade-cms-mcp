@@ -18,6 +18,7 @@ All notable changes to `cascade-cms-mcp-server` will be documented here.
 
 ### Changed
 
+- Updated `@modelcontextprotocol/server` from `2.0.0-beta.5` to stable `2.0.0`.
 - Existing unprefixed and `cascade_*` tool-block rules continue matching renamed `api_*` tools. Generated site protections now store `api_remove` and `api_move`.
 - Asset-specific tool-block rules now recognize the flat `asset_id` and `asset_type` fields used by browser asset tools.
 - Made `api_read` preview the primary read path and reserved raw mode for cases where preview or cached inspection cannot provide the required data.
