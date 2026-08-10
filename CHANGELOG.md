@@ -4,6 +4,19 @@ All notable changes to `cascade-cms-mcp-server` will be documented here.
 
 ## Unreleased
 
+### Added
+
+- Added dual-era stdio support for legacy 2025 clients and MCP `2026-07-28` clients, with legacy serving retained by default.
+
+### Changed
+
+- Browser UI authentication now occurs on the first browser-backed operation instead of during server startup.
+- Clarified that cached response, asset, and draft handles are connection-scoped while the browser session is process-scoped.
+
+### Fixed
+
+- Redacted, flattened, and length-bounded untrusted stdio transport errors before writing them to stderr.
+
 ## 3.0.0 - 2026-08-10
 
 ### Added

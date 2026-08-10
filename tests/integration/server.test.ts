@@ -589,6 +589,75 @@ describe("createServer (server factory)", () => {
     expect(secondSliceText.slice_text).not.toBe(firstSliceText.slice_text);
   });
 
+  test("fresh server instances isolate response, asset, and draft handles while sharing browser dependencies", async () => {
+    const client = createMockClient({
+      read: mock((input: any) => Promise.resolve(
+        input.identifier.id === "huge-page-id" ? READ_PAGE_HUGE : READ_PAGE_OK,
+      )),
+    });
+    const browserSession = {
+      login: mock(async () => ({
+        success: true,
+        authenticated: true,
+        browser_url: "https://tenant.cascadecms.com",
+        site_id: "site-123",
+        cookie_names: ["JSESSIONID"],
+        logged_in_at: "2026-08-10T00:00:00.000Z",
+      })),
+    };
+    const firstServer = createServer(client, {
+      browserSession: browserSession as any,
+      toolBlockStore: emptyToolBlockStore(),
+    });
+    const secondServer = createServer(client, {
+      browserSession: browserSession as any,
+      toolBlockStore: emptyToolBlockStore(),
+    });
+    const firstTransport = await connectTestTransport(firstServer);
+    const secondTransport = await connectTestTransport(secondServer);
+
+    const read = await callToolViaProtocol(firstTransport, "api_read", {
+      identifier: { id: "page-001", type: "page" },
+    });
+    const readBody = read.structuredContent as Record<string, any>;
+    const draft = await callToolViaProtocol(firstTransport, "local_draft_open", {
+      operation: "edit",
+      asset_handle: readBody.asset_handle,
+      expected_raw_hash: readBody.raw_hash,
+    });
+    const draftHandle = (draft.structuredContent as Record<string, any>).draft_handle;
+    const oversize = await callToolViaProtocol(firstTransport, "api_read", {
+      identifier: { id: "huge-page-id", type: "page" },
+      read_mode: "raw",
+    });
+    const responseHandle = (oversize.structuredContent as Record<string, any>)
+      ._cache.handle;
+
+    const missingAsset = await callToolViaProtocol(
+      secondTransport,
+      "asset_get_value",
+      { asset_handle: readBody.asset_handle, pointer: "" },
+    );
+    const missingDraft = await callToolViaProtocol(
+      secondTransport,
+      "local_draft_get_value",
+      { draft_handle: draftHandle, pointer: "" },
+    );
+    const missingResponse = await callToolViaProtocol(
+      secondTransport,
+      "local_read_cached_response",
+      { handle: responseHandle, offset: 0, length: 100 },
+    );
+
+    expect(missingAsset.isError).toBe(true);
+    expect(missingDraft.isError).toBe(true);
+    expect(missingResponse.isError).toBe(true);
+
+    await callToolViaProtocol(firstTransport, "browser_login", {});
+    await callToolViaProtocol(secondTransport, "browser_login", {});
+    expect(browserSession.login).toHaveBeenCalledTimes(2);
+  });
+
   test("tools/call path returns project JSON validation errors for removed and invalid fields", async () => {
     const client = createMockClient({
       read: mock(() => Promise.resolve(READ_PAGE_OK)),

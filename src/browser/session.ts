@@ -228,7 +228,7 @@ class BrowserApiSession implements BrowserSession {
   private assertConfigured(): void {
     if (this.username && this.password) return;
     throw new Error(
-      "Browser API login is not configured. Set CASCADE_BROWSER_USERNAME and CASCADE_BROWSER_PASSWORD to enable browser login. Set CASCADE_BROWSER_SITE_ID for startup/automatic browser login, or pass site_id to browser_login. Set CASCADE_BROWSER_URL only when the browser UI root differs from the origin derived from CASCADE_URL.",
+      "Browser API login is not configured. Set CASCADE_BROWSER_USERNAME and CASCADE_BROWSER_PASSWORD to enable browser login. Set CASCADE_BROWSER_SITE_ID for automatic login on the first browser-backed operation, or pass site_id to browser_login. Set CASCADE_BROWSER_URL only when the browser UI root differs from the origin derived from CASCADE_URL.",
     );
   }
 

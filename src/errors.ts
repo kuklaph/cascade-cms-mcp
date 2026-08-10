@@ -18,6 +18,7 @@ import type { CallToolResult } from "@modelcontextprotocol/server";
 const REQUEST_FAILED_PREFIX = "Request Failed. Request Response: ";
 const TIMEOUT_MESSAGE = "Request timed out";
 const MISSING_CONFIG_MESSAGE = "Missing API key or cascade URL";
+const MAX_LOG_MESSAGE_CHARS = 500;
 
 /**
  * Defensive redaction of anything that looks like a secret. Applied to
@@ -47,6 +48,16 @@ export function redactSecrets(msg: string): string {
         "$1=[REDACTED]",
       )
   );
+}
+
+/** Redact and bound untrusted text for one-line stderr records. */
+export function sanitizeLogMessage(msg: string): string {
+  return redactSecrets(msg)
+    .replace(
+      /[\u0000-\u001F\u007F-\u009F\u202A-\u202E\u2066-\u2069]+/g,
+      " ",
+    )
+    .slice(0, MAX_LOG_MESSAGE_CHARS);
 }
 
 function toMcpError(text: string, opName: string): CallToolResult {
@@ -126,7 +137,7 @@ function suggestedRecovery(message: string): Record<string, unknown> {
     return {
       hints: [
         "Set CASCADE_BROWSER_USERNAME and CASCADE_BROWSER_PASSWORD to enable browser login.",
-        "Set CASCADE_BROWSER_SITE_ID to the production site ID for startup/automatic browser login.",
+        "Set CASCADE_BROWSER_SITE_ID to the production site ID for automatic login on the first browser-backed operation.",
         "Without CASCADE_BROWSER_SITE_ID, run browser_login with site_id before calling other browser-backed tools.",
         "To find the site ID, select the production site in Cascade, open Manage Site, and copy the site ID from the browser URL.",
       ],

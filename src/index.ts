@@ -2,16 +2,16 @@
 /**
  * Entry point for the Cascade CMS MCP server.
  *
- * Loads config from env, builds the Cascade client and MCP server,
- * and connects a stdio transport. Logs lifecycle events to stderr
- * (stdout is reserved for the MCP protocol stream).
+ * Loads config from env, builds process-scoped Cascade dependencies,
+ * and serves fresh MCP server instances over stdio. Logs lifecycle events
+ * to stderr (stdout is reserved for the MCP protocol stream).
  */
 
-import { StdioServerTransport } from "@modelcontextprotocol/server/stdio";
+import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import { loadConfig } from "./config.js";
 import { createCascadeClient } from "./client.js";
 import { createBrowserSession } from "./browserApi.js";
-import { redactSecrets } from "./errors.js";
+import { sanitizeLogMessage } from "./errors.js";
 import { createServer } from "./server.js";
 import { SERVER_NAME } from "./constants.js";
 
@@ -33,48 +33,50 @@ async function main(): Promise<void> {
     config = await loadConfig();
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    process.stderr.write(`[${SERVER_NAME}] ${msg}\n`);
+    process.stderr.write(`[${SERVER_NAME}] ${sanitizeLogMessage(msg)}\n`);
     process.exit(1);
   }
 
   const client = createCascadeClient(config);
   const browserSession = createBrowserSession(config);
-  if (config.browserUsername && config.browserPassword && config.browserSiteId) {
-    try {
-      await browserSession.login({});
-      process.stderr.write(
-        `[${SERVER_NAME}] browser login succeeded for site_id=${config.browserSiteId}\n`,
-      );
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      process.stderr.write(
-        `[${SERVER_NAME}] browser login skipped: ${redactSecrets(msg)}\n`,
-      );
-    }
-  } else if (config.browserUsername && config.browserPassword) {
-    process.stderr.write(
-      `[${SERVER_NAME}] browser login skipped: set CASCADE_BROWSER_SITE_ID to the production site ID to enable startup browser login\n`,
-    );
-  }
-  const server = createServer(client, {
-    browserSession,
-    cascadeUrl: config.url,
-  });
-  const transport = new StdioServerTransport();
-
-  await server.connect(transport);
+  const handle = serveStdio(
+    () => createServer(client, {
+      browserSession,
+      cascadeUrl: config.url,
+    }),
+    {
+      legacy: "serve",
+      onerror: (error) => {
+        process.stderr.write(
+          `[${SERVER_NAME}] stdio: ${sanitizeLogMessage(error.message)}\n`,
+        );
+      },
+    },
+  );
 
   process.stderr.write(`[${SERVER_NAME}] started on stdio\n`);
 
+  let shuttingDown = false;
   const shutdown = async (): Promise<void> => {
-    await server.close();
-    process.exit(0);
+    if (shuttingDown) return;
+    shuttingDown = true;
+    try {
+      await handle.close();
+      process.exit(0);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      process.stderr.write(
+        `[${SERVER_NAME}] fatal: ${sanitizeLogMessage(msg)}\n`,
+      );
+      process.exit(1);
+    }
   };
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);
 }
 
 main().catch((err: unknown) => {
-  process.stderr.write(`[${SERVER_NAME}] fatal: ${err}\n`);
+  const msg = err instanceof Error ? err.message : String(err);
+  process.stderr.write(`[${SERVER_NAME}] fatal: ${sanitizeLogMessage(msg)}\n`);
   process.exit(1);
 });

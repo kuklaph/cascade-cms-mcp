@@ -40,8 +40,8 @@ import { registerCascadeResources } from "./resources.js";
 /**
  * Build an `McpServer` with all tools registered.
  *
- * The server is returned unconnected; the caller must attach a transport
- * (e.g., `StdioServerTransport`) and invoke `server.connect(transport)`.
+ * The server is returned unconnected so callers can attach their chosen
+ * lifecycle, including constructing fresh instances through `serveStdio`.
  *
  * @param client - The Cascade API client.
  * @param deps   - Optional shared dependencies. When omitted, a fresh in-memory

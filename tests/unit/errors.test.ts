@@ -1,5 +1,5 @@
 import { describe, test, expect } from "bun:test";
-import { translateError } from "../../src/errors.js";
+import { sanitizeLogMessage, translateError } from "../../src/errors.js";
 import type { CallToolResult } from "@modelcontextprotocol/server";
 
 /** Narrow the first content block to a text block (TS-safe accessor). */
@@ -124,5 +124,18 @@ describe("translateError", () => {
 
     const text = firstText(result);
     expect(text).not.toContain("sk-abc123");
+  });
+});
+
+describe("sanitizeLogMessage", () => {
+  test("redacts, flattens control characters, and caps untrusted log text", () => {
+    const result = sanitizeLogMessage(
+      `unsupported\r\nrevision\t\u0000\u001b[31m token=sk-abcdef123456 ${"x".repeat(1000)}\u202e`,
+    );
+
+    expect(result).not.toContain("sk-abcdef123456");
+    expect(result).toContain("[REDACTED]");
+    expect(result).not.toMatch(/[\u0000-\u001F\u007F-\u009F\u202A-\u202E\u2066-\u2069]/);
+    expect(result.length).toBeLessThanOrEqual(500);
   });
 });

@@ -9,19 +9,18 @@
  * stream and must never receive ad-hoc text or the transport breaks.
  *
  * Error messages are passed through `redactSecrets` (same pipeline as
- * user-facing errors) and sanitized against newlines/quotes so a single
- * line per invocation is guaranteed and log parsers don't corrupt.
+ * user-facing errors), stripped of control characters, length-bounded, and
+ * sanitized against quotes so log parsers cannot be corrupted.
  */
 
 import { SERVER_NAME } from "./constants.js";
-import { redactSecrets } from "./errors.js";
+import { sanitizeLogMessage } from "./errors.js";
 
 const MAX_AUDIT_ERROR_CHARS = 500;
 
 /** Redact + normalize a raw error message for a single-line audit record. */
 function sanitizeErrorForAudit(raw: string): string {
-  return redactSecrets(raw)
-    .replace(/[\r\n]+/g, " ")
+  return sanitizeLogMessage(raw)
     .replace(/"/g, '\\"')
     .slice(0, MAX_AUDIT_ERROR_CHARS);
 }

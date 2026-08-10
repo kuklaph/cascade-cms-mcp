@@ -15,6 +15,8 @@ Start with [Setup](#setup) for required values and client config. Use [What It C
 - A Cascade CMS instance with REST API access and an API key.
 - An MCP client that can launch stdio servers, such as Claude, Codex, Cline, MCP Inspector, or another compliant client.
 
+The stdio entrypoint supports legacy 2025 initialization and MCP `2026-07-28` discovery. Legacy serving remains enabled, and clients that support automatic negotiation select the appropriate protocol without server configuration changes.
+
 ### Quick Start
 
 Most MCP clients need `command`, `args`, `CASCADE_API_KEY`, and `CASCADE_URL`. Browser-backed tools also need `CASCADE_BROWSER_USERNAME`, `CASCADE_BROWSER_PASSWORD`, and `CASCADE_BROWSER_SITE_ID`. Use `bunx` when available; use `npx` otherwise.
@@ -164,7 +166,7 @@ Recommended browser setup:
 
 The site ID is required because Cascade's browser UI keeps an active site context. Browser login calls `switchSite.act` after authentication to mirror selecting a site in Cascade's site picker.
 
-Browser session operations run one at a time per MCP session so login, site selection, cookie use, expiry recovery, and retries cannot interleave. Up to 20 additional browser session operations wait in FIFO order. Browser-backed physical requests still start at most once every 3 seconds per MCP session to avoid pressuring Cascade's browser UI endpoints. Standard Cascade API operations use the separate concurrency limit above.
+Browser session operations run one at a time per server process so login, site selection, cookie use, expiry recovery, and retries cannot interleave. Up to 20 additional browser session operations wait in FIFO order. Browser-backed physical requests still start at most once every 3 seconds per server process to avoid pressuring Cascade's browser UI endpoints. Standard Cascade API operations use the separate concurrency limit above.
 
 #### Find the Site ID
 
@@ -177,7 +179,7 @@ Browser session operations run one at a time per MCP session so login, site sele
 
 If `CASCADE_API_KEY` and `CASCADE_URL` are already configured, you can ask your MCP agent to list Cascade sites. The agent can call `api_list_sites` and use the production site's ID from that response. This depends on the API user's permissions and may not show the intended production site.
 
-When all three browser values are present, startup attempts browser login and caches the session. If startup login fails, the MCP server still starts and standard API tools remain available. Without `CASCADE_BROWSER_SITE_ID`, call `browser_login` with `site_id` before other browser-backed tools in the same MCP session.
+When all three browser values are present, the first browser-backed operation logs in automatically and caches the session. Server startup and standard API tools do not wait for browser authentication. Without `CASCADE_BROWSER_SITE_ID`, call `browser_login` with `site_id` before other browser-backed tools in the same server process.
 
 ## What It Can Do
 
@@ -215,7 +217,7 @@ These sections are mainly for agents and users configuring MCP approvals. They c
 
 Most tool responses put JSON text in `content[0]`. When present, `structuredContent` is the authoritative machine-readable result.
 
-Oversized responses return bounded `_cache` metadata. Use `local_read_cached_response` with that handle to page through the full serialized response. `characters_total`, `characters_returned`, and offsets use JavaScript UTF-16 code units. `bytes_total` and `bytes_returned` remain as deprecated compatibility aliases and are not byte counts. Handles are process-scoped and may be evicted after later calls.
+Oversized responses return bounded `_cache` metadata. Use `local_read_cached_response` with that handle to page through the full serialized response. `characters_total`, `characters_returned`, and offsets use JavaScript UTF-16 code units. `bytes_total` and `bytes_returned` remain as deprecated compatibility aliases and are not byte counts. Handles are connection-scoped and may be evicted after later calls or lost when the client reconnects.
 
 `api_read` uses preview as its primary mode. Preview returns routine asset identity, file MIME metadata when available, and an `asset_handle` for targeted inspection. Use `read_mode: "raw"` only when preview or cached inspection cannot provide what you need, including when an exact REST field is unavailable or preview indexing limits are exceeded. Follow-up tools inspect cached data and do not call Cascade again.
 
@@ -549,7 +551,7 @@ Use `protect_site_removal` to generate remove and move safeguards for accessible
 ## Troubleshooting
 
 - If tools appear unavailable, verify the MCP client can start the server and that `CASCADE_API_KEY` and `CASCADE_URL` are set in the environment used by that client.
-- If a cached handle is missing, rerun the originating tool. Handles are in-memory and process-scoped.
+- If a cached handle is missing, rerun the originating tool. Handles are in-memory and connection-scoped.
 - If `local_draft_open` reports an `expected_raw_hash` mismatch, rerun `api_read` and use the current `raw_hash`.
 - If `local_draft_submit` reports that the source asset changed, rerun `api_read` and open a fresh draft.
 - If a draft patch or submit reports an `expected_revision` mismatch, inspect the draft and retry with the current revision.
@@ -559,7 +561,7 @@ Use `protect_site_removal` to generate remove and move safeguards for accessible
 ## Security Notes
 
 - Credentials are loaded from environment variables only. Keep real values in the local MCP client environment, a client secret store, or dotseal-encrypted env values.
-- Cached reads, drafts, and browser sessions are in-memory and process-scoped. Restart the MCP server to clear them.
+- Cached response, asset, and draft handles are in-memory and connection-scoped. Browser sessions are process-scoped. Restart the MCP server to clear them.
 - Draft and write tools check blocked-call rules before mutating local state or calling Cascade.
 - Error messages are redacted before being logged or returned.
 - Input validation rejects unknown fields at the MCP boundary.

@@ -15,7 +15,7 @@ import {
 } from "./helper.js";
 
 const browserSessionRequirement =
-  "This tool uses a cached browser session, or logs in automatically when CASCADE_BROWSER_USERNAME, CASCADE_BROWSER_PASSWORD, and CASCADE_BROWSER_SITE_ID are configured. If CASCADE_BROWSER_SITE_ID is missing, run browser_login with site_id before calling this tool. It never accepts credentials or cookies in tool input.";
+  "This tool uses a cached browser session, or logs in automatically on first use when CASCADE_BROWSER_USERNAME, CASCADE_BROWSER_PASSWORD, and CASCADE_BROWSER_SITE_ID are configured. If CASCADE_BROWSER_SITE_ID is missing, run browser_login with site_id before calling this tool. It never accepts credentials or cookies in tool input.";
 
 export function registerBrowserTools(
   server: McpServer,
@@ -27,7 +27,7 @@ export function registerBrowserTools(
     description: buildCascadeToolDescription(
       `Authenticate against Cascade's browser UI and store the resulting session in this MCP server process for later browser-backed tools.
 
-This is the recovery path for browser-only operations when startup login failed or CASCADE_BROWSER_SITE_ID was not configured. Normal browser setup should provide CASCADE_BROWSER_USERNAME, CASCADE_BROWSER_PASSWORD, and CASCADE_BROWSER_SITE_ID before the MCP server starts. Credentials are never accepted in tool input or returned in tool output. The browser base URL is derived from CASCADE_URL unless CASCADE_BROWSER_URL is set.
+This is the explicit login and site-selection path when CASCADE_BROWSER_SITE_ID is not configured, automatic login fails, or you need to switch sites. Normal browser setup should provide CASCADE_BROWSER_USERNAME, CASCADE_BROWSER_PASSWORD, and CASCADE_BROWSER_SITE_ID before the MCP server starts. Credentials are never accepted in tool input or returned in tool output. The browser base URL is derived from CASCADE_URL unless CASCADE_BROWSER_URL is set.
 
 Args:
   - site_id (string, optional): Cascade site ID to switch into after browser login. Required unless CASCADE_BROWSER_SITE_ID is configured. Use the production site ID by default.
@@ -35,7 +35,7 @@ Args:
 Returns:
   { success: true, authenticated: true, browser_url, site_id, cookie_names, logged_in_at }
 
-Use when: setting up browser-backed Cascade functionality before calling browser tools.
+Use when: authenticating explicitly, recovering browser access, or switching sites.
 Don't use when: the standard Cascade REST/SOAP API tool can perform the operation directly.`,
     ),
     inputSchema: BrowserLoginRequestSchema,
@@ -235,6 +235,6 @@ Don't use when: you only know the snippet name; first call browser_list_snippets
 function requireBrowserSession(deps: CascadeDeps | undefined) {
   if (deps?.browserSession) return deps.browserSession;
   throw new Error(
-    "Browser API login is not configured. Set CASCADE_BROWSER_USERNAME and CASCADE_BROWSER_PASSWORD to enable browser login. Set CASCADE_BROWSER_SITE_ID for startup/automatic browser login, or pass site_id to browser_login. Set CASCADE_BROWSER_URL only when the browser UI root differs from the origin derived from CASCADE_URL.",
+    "Browser API login is not configured. Set CASCADE_BROWSER_USERNAME and CASCADE_BROWSER_PASSWORD to enable browser login. Set CASCADE_BROWSER_SITE_ID for automatic login on the first browser-backed operation, or pass site_id to browser_login. Set CASCADE_BROWSER_URL only when the browser UI root differs from the origin derived from CASCADE_URL.",
   );
 }

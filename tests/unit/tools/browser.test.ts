@@ -97,7 +97,7 @@ describe("browser_login tool", () => {
     expect(firstText(result)).toContain("CASCADE_BROWSER_SITE_ID");
     expect(firstText(result)).toContain("CASCADE_BROWSER_URL");
     expect((result.structuredContent as any).error.hints).toContain(
-      "Set CASCADE_BROWSER_SITE_ID to the production site ID for startup/automatic browser login.",
+      "Set CASCADE_BROWSER_SITE_ID to the production site ID for automatic login on the first browser-backed operation.",
     );
   });
 
@@ -173,7 +173,7 @@ describe("browser_check_draft tool", () => {
     expect(firstText(result)).toContain("CASCADE_BROWSER_USERNAME");
     expect(firstText(result)).toContain("CASCADE_BROWSER_SITE_ID");
     expect((result.structuredContent as any).error.hints).toContain(
-      "Set CASCADE_BROWSER_SITE_ID to the production site ID for startup/automatic browser login.",
+      "Set CASCADE_BROWSER_SITE_ID to the production site ID for automatic login on the first browser-backed operation.",
     );
   });
 
