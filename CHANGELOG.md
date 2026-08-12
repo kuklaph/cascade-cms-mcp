@@ -7,11 +7,19 @@ All notable changes to `cascade-cms-mcp-server` will be documented here.
 ### Added
 
 - Added dual-era stdio support for legacy 2025 clients and MCP `2026-07-28` clients, with legacy serving retained by default.
+- Added `CASCADE_REQUEST_BATCH_DELAY_MS` to configure the pause between queued normal-operation cohorts. The default is 3000 milliseconds; `0` disables the pause.
 
 ### Changed
 
 - Browser UI authentication now occurs on the first browser-backed operation instead of during server startup.
 - Clarified that cached response, asset, and draft handles are connection-scoped while the browser session is process-scoped.
+- Normal Cascade API operations now run in strict cohorts. Queued work starts only after every operation in the active cohort settles and the configured batch delay expires.
+- Limited the normal-operation waiting queue to 1000 operations so abnormal clients cannot grow retained queued request payloads without bound.
+- Cancelled MCP requests are removed from the normal-operation queue before dispatch to Cascade.
+
+### Breaking Changes
+
+- Limited `CASCADE_MAX_CONCURRENT_REQUESTS` to the fixed range 1 through 5000 as a worst-case guard against configuration mistakes. Configurations above 5000 must be reduced before startup.
 
 ### Fixed
 

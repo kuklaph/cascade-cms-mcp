@@ -1,13 +1,14 @@
 /**
- * Thin factory wrapping the cascade-cms-api `CascadeAPI` constructor.
+ * Factory for the configured and rate-limited Cascade API client.
  *
- * This module exists purely to bridge our validated `Config` type to the
- * upstream library's two-argument initializer: `({ apiKey, url }, timeoutMs)`.
+ * Bridges validated configuration to the upstream `CascadeAPI` constructor,
+ * then wraps its operations with the shared cohort limiter.
  */
 
 import { CascadeAPI } from "cascade-cms-api";
+import { CohortOperationLimiter } from "./cohortOperationLimiter.js";
 import type { Config } from "./config.js";
-import { OperationLimiter } from "./operationLimiter.js";
+import { currentRequestSignal } from "./requestContext.js";
 
 /**
  * The concrete client object returned by `CascadeAPI(...)` — includes all
@@ -23,8 +24,9 @@ export function createCascadeClient(config: Config): CascadeClient {
     { apiKey: config.apiKey, url: config.url },
     config.timeoutMs,
   );
-  const limiter = new OperationLimiter({
-    maxConcurrent: config.maxConcurrentRequests,
+  const limiter = new CohortOperationLimiter({
+    cohortSize: config.maxConcurrentRequests,
+    delayMs: config.requestBatchDelayMs,
   });
   const methods = client as unknown as Record<
     string,
@@ -34,7 +36,11 @@ export function createCascadeClient(config: Config): CascadeClient {
   return Object.fromEntries(
     Object.entries(methods).map(([name, method]) => [
       name,
-      (...args: never[]) => limiter.run(() => method.apply(client, args)),
+      (...args: never[]) =>
+        limiter.run(
+          () => method.apply(client, args),
+          currentRequestSignal(),
+        ),
     ]),
   ) as CascadeClient;
 }

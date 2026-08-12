@@ -12,14 +12,19 @@
 import { z } from "zod";
 import {
   DEFAULT_MAX_CONCURRENT_REQUESTS,
+  DEFAULT_REQUEST_BATCH_DELAY_MS,
   DEFAULT_TIMEOUT_MS,
+  MAX_CONCURRENT_REQUESTS,
 } from "./constants.js";
+
+const MAX_TIMER_DELAY_MS = 2_147_483_647;
 
 export type Config = {
   apiKey: string;
   url: string;
   timeoutMs: number;
   maxConcurrentRequests: number;
+  requestBatchDelayMs: number;
   browserUsername?: string;
   browserPassword?: string;
   browserUrl?: string;
@@ -47,8 +52,19 @@ const ConfigSchema = z.object({
     .refine(
       (v) =>
         v === undefined ||
-        (/^\d+$/.test(v) && Number(v) > 0 && Number.isSafeInteger(Number(v))),
-      "CASCADE_MAX_CONCURRENT_REQUESTS must be a positive safe integer",
+        (/^\d+$/.test(v) &&
+          Number(v) > 0 &&
+          Number(v) <= MAX_CONCURRENT_REQUESTS),
+      "CASCADE_MAX_CONCURRENT_REQUESTS must be an integer from 1 through 5000",
+    ),
+  CASCADE_REQUEST_BATCH_DELAY_MS: z
+    .string()
+    .optional()
+    .refine(
+      (v) =>
+        v === undefined ||
+        (/^\d+$/.test(v) && Number(v) <= MAX_TIMER_DELAY_MS),
+      "CASCADE_REQUEST_BATCH_DELAY_MS must be a non-negative integer no greater than 2147483647 milliseconds",
     ),
   CASCADE_BROWSER_USERNAME: z
     .string()
@@ -131,6 +147,7 @@ export async function loadConfig(
   let url: string | undefined;
   let timeoutMs: string | undefined;
   let maxConcurrentRequests: string | undefined;
+  let requestBatchDelayMs: string | undefined;
   let browserUsername: string | undefined;
   let browserPassword: string | undefined;
   let browserUrl: string | undefined;
@@ -154,6 +171,11 @@ export async function loadConfig(
   ({ value: maxConcurrentRequests, dotseal } = await decryptIfNeeded(
     "CASCADE_MAX_CONCURRENT_REQUESTS",
     env.CASCADE_MAX_CONCURRENT_REQUESTS,
+    dotseal,
+  ));
+  ({ value: requestBatchDelayMs, dotseal } = await decryptIfNeeded(
+    "CASCADE_REQUEST_BATCH_DELAY_MS",
+    env.CASCADE_REQUEST_BATCH_DELAY_MS,
     dotseal,
   ));
   ({ value: browserUsername, dotseal } = await decryptIfNeeded(
@@ -182,6 +204,7 @@ export async function loadConfig(
     CASCADE_URL: url,
     CASCADE_TIMEOUT_MS: timeoutMs,
     CASCADE_MAX_CONCURRENT_REQUESTS: maxConcurrentRequests,
+    CASCADE_REQUEST_BATCH_DELAY_MS: requestBatchDelayMs,
     CASCADE_BROWSER_USERNAME: browserUsername,
     CASCADE_BROWSER_PASSWORD: browserPassword,
     CASCADE_BROWSER_URL: browserUrl,
@@ -207,6 +230,10 @@ export async function loadConfig(
     maxConcurrentRequests: data.CASCADE_MAX_CONCURRENT_REQUESTS
       ? Number(data.CASCADE_MAX_CONCURRENT_REQUESTS)
       : DEFAULT_MAX_CONCURRENT_REQUESTS,
+    requestBatchDelayMs:
+      data.CASCADE_REQUEST_BATCH_DELAY_MS !== undefined
+        ? Number(data.CASCADE_REQUEST_BATCH_DELAY_MS)
+        : DEFAULT_REQUEST_BATCH_DELAY_MS,
     ...(data.CASCADE_BROWSER_USERNAME
       ? { browserUsername: data.CASCADE_BROWSER_USERNAME }
       : {}),

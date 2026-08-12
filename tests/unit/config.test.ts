@@ -16,6 +16,7 @@ describe("loadConfig", () => {
       url: "https://cascade.example.edu/api",
       timeoutMs: 15000,
       maxConcurrentRequests: 10,
+      requestBatchDelayMs: 3000,
     });
   });
 
@@ -108,9 +109,69 @@ describe("loadConfig", () => {
     expect(cfg.maxConcurrentRequests).toBe(10);
   });
 
+  test("should default requestBatchDelayMs to 3000", async () => {
+    const cfg = await loadConfig({
+      CASCADE_API_KEY: "abc123",
+      CASCADE_URL: "https://tenant.cascadecms.com/api/v1",
+    } as NodeJS.ProcessEnv);
+
+    expect(cfg.requestBatchDelayMs).toBe(3000);
+  });
+
+  test.each([
+    ["0", 0],
+    ["1", 1],
+    ["2500", 2500],
+    ["2147483647", 2147483647],
+  ])(
+    "should accept CASCADE_REQUEST_BATCH_DELAY_MS=%s",
+    async (value, expected) => {
+      const cfg = await loadConfig({
+        CASCADE_API_KEY: "abc123",
+        CASCADE_URL: "https://tenant.cascadecms.com/api/v1",
+        CASCADE_REQUEST_BATCH_DELAY_MS: value,
+      } as NodeJS.ProcessEnv);
+
+      expect(cfg.requestBatchDelayMs).toBe(expected);
+    },
+  );
+
+  test.each(["-1", "1.5", "delay", "2147483648", "9007199254740992"])(
+    "should reject invalid CASCADE_REQUEST_BATCH_DELAY_MS value %s without echoing it",
+    async (value) => {
+      let thrown: Error | null = null;
+      try {
+        await loadConfig({
+          CASCADE_API_KEY: "abc123",
+          CASCADE_URL: "https://tenant.cascadecms.com/api/v1",
+          CASCADE_REQUEST_BATCH_DELAY_MS: value,
+        } as NodeJS.ProcessEnv);
+      } catch (error) {
+        thrown = error as Error;
+      }
+
+      expect(thrown?.message).toContain("CASCADE_REQUEST_BATCH_DELAY_MS");
+      expect(thrown?.message).not.toContain(value);
+    },
+  );
+
+  test.each(["", " ", " 10 "])(
+    "should reject blank or whitespace-padded CASCADE_REQUEST_BATCH_DELAY_MS value %#",
+    async (value) => {
+      await expect(
+        loadConfig({
+          CASCADE_API_KEY: "abc123",
+          CASCADE_URL: "https://tenant.cascadecms.com/api/v1",
+          CASCADE_REQUEST_BATCH_DELAY_MS: value,
+        } as NodeJS.ProcessEnv),
+      ).rejects.toThrow(/CASCADE_REQUEST_BATCH_DELAY_MS/);
+    },
+  );
+
   test.each([
     ["1", 1],
     ["25", 25],
+    ["5000", 5000],
   ])("should accept CASCADE_MAX_CONCURRENT_REQUESTS=%s", async (value, expected) => {
     const cfg = await loadConfig({
       CASCADE_API_KEY: "abc123",
@@ -121,7 +182,19 @@ describe("loadConfig", () => {
     expect(cfg.maxConcurrentRequests).toBe(expected);
   });
 
-  test.each(["0", "-1", "1.5", " 10 ", "many", "9007199254740992"])(
+  test("should reject zero CASCADE_MAX_CONCURRENT_REQUESTS with the supported range", async () => {
+    await expect(
+      loadConfig({
+        CASCADE_API_KEY: "abc123",
+        CASCADE_URL: "https://tenant.cascadecms.com/api/v1",
+        CASCADE_MAX_CONCURRENT_REQUESTS: "0",
+      } as NodeJS.ProcessEnv),
+    ).rejects.toThrow(
+      "Invalid configuration: CASCADE_MAX_CONCURRENT_REQUESTS — CASCADE_MAX_CONCURRENT_REQUESTS must be an integer from 1 through 5000",
+    );
+  });
+
+  test.each(["-1", "1.5", " 10 ", "many", "5001", "9007199254740992"])(
     "should reject invalid CASCADE_MAX_CONCURRENT_REQUESTS value %s without echoing it",
     async (value) => {
       let thrown: Error | null = null;
@@ -180,6 +253,7 @@ describe("loadConfig — dotseal decryption", () => {
       if (v === "enc:abc") return "decrypted-key";
       if (v === "enc:xyz") return "https://decrypted.example.edu/api";
       if (v === "enc:limit") return "12";
+      if (v === "enc:delay") return "0";
       throw new Error(`unexpected ciphertext: ${v}`);
     });
     mock.module("dotseal", () => ({ decrypt: decryptSpy }));
@@ -188,6 +262,7 @@ describe("loadConfig — dotseal decryption", () => {
       CASCADE_API_KEY: "enc:abc",
       CASCADE_URL: "enc:xyz",
       CASCADE_MAX_CONCURRENT_REQUESTS: "enc:limit",
+      CASCADE_REQUEST_BATCH_DELAY_MS: "enc:delay",
     };
 
     const cfg = await loadConfig(env as NodeJS.ProcessEnv);
@@ -195,7 +270,8 @@ describe("loadConfig — dotseal decryption", () => {
     expect(cfg.apiKey).toBe("decrypted-key");
     expect(cfg.url).toBe("https://decrypted.example.edu/api");
     expect(cfg.maxConcurrentRequests).toBe(12);
-    expect(decryptSpy).toHaveBeenCalledTimes(3);
+    expect(cfg.requestBatchDelayMs).toBe(0);
+    expect(decryptSpy).toHaveBeenCalledTimes(4);
   });
 
   test("should throw clean error when decryption fails, without leaking ciphertext", async () => {

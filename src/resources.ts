@@ -32,6 +32,7 @@ import type {
 } from "@modelcontextprotocol/server";
 import type { Types } from "cascade-cms-api";
 import type { CascadeClient } from "./client.js";
+import { runWithRequestSignal } from "./requestContext.js";
 import {
   createAssetCache,
   isAssetHandle,
@@ -265,29 +266,30 @@ export function registerCascadeResources(
         "Live list of all Cascade CMS sites accessible with the current API credentials. Fetched on read.",
       mimeType: "application/json",
     },
-    async (uri: URL) => {
-      try {
-        const result = await client.listSites(
-          {} as unknown as Types.ListSitesRequest,
-        );
-        return textResource(uri, JSON.stringify(result, null, 2));
-      } catch (err) {
-        // Translate via the shared error pipeline so secret redaction and
-        // actionable messaging are identical to tool-invocation errors.
-        // Wrap in a JSON envelope so the advertised application/json
-        // mimeType is honest and agents can reliably JSON.parse the body.
-        const translated = translateError(err, "cascade://sites");
-        const firstBlock = translated.content[0];
-        const errorText =
-          firstBlock && firstBlock.type === "text"
-            ? firstBlock.text
-            : "cascade://sites failed: unknown error";
-        return textResource(
-          uri,
-          JSON.stringify({ error: errorText }, null, 2),
-        );
-      }
-    },
+    async (uri: URL, context) =>
+      runWithRequestSignal(context?.mcpReq.signal, async () => {
+        try {
+          const result = await client.listSites(
+            {} as unknown as Types.ListSitesRequest,
+          );
+          return textResource(uri, JSON.stringify(result, null, 2));
+        } catch (err) {
+          // Translate via the shared error pipeline so secret redaction and
+          // actionable messaging are identical to tool-invocation errors.
+          // Wrap in a JSON envelope so the advertised application/json
+          // mimeType is honest and agents can reliably JSON.parse the body.
+          const translated = translateError(err, "cascade://sites");
+          const firstBlock = translated.content[0];
+          const errorText =
+            firstBlock && firstBlock.type === "text"
+              ? firstBlock.text
+              : "cascade://sites failed: unknown error";
+          return textResource(
+            uri,
+            JSON.stringify({ error: errorText }, null, 2),
+          );
+        }
+      }),
   );
 
   server.registerResource(

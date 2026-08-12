@@ -7,6 +7,8 @@ export const SERVER_NAME = "cascade-cms-mcp-server";
 export const SERVER_VERSION = "3.0.0";
 export const DEFAULT_TIMEOUT_MS = 30000;
 export const DEFAULT_MAX_CONCURRENT_REQUESTS = 10;
+export const MAX_CONCURRENT_REQUESTS = 5000;
+export const DEFAULT_REQUEST_BATCH_DELAY_MS = 3000;
 
 /** Max chars rendered into `content[0].text` when minting a cache handle. */
 export const PREVIEW_LIMIT = 20_000;

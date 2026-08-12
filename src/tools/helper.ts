@@ -12,6 +12,7 @@ import { z } from "zod";
 import type {
   CallToolResult,
   McpServer,
+  ServerContext,
   StandardSchemaWithJSON,
   ToolAnnotations,
 } from "@modelcontextprotocol/server";
@@ -22,6 +23,7 @@ import type { ResponseCache } from "../cache.js";
 import type { AssetCache } from "../assetIndex.js";
 import type { DraftCache } from "../assetDrafts.js";
 import type { BrowserSession } from "../browserApi.js";
+import { runWithRequestSignal } from "../requestContext.js";
 import {
   describeToolBlockRule,
   findDeniedToolCall,
@@ -119,7 +121,10 @@ export function registerCascadeTool<TSchema extends z.ZodTypeAny>(
       annotations,
     },
     // Wrapped handler: the MCP SDK provides already-validated input here.
-    (async (input: Record<string, unknown>): Promise<CallToolResult> => {
+    (async (
+      input: Record<string, unknown>,
+      context: ServerContext,
+    ): Promise<CallToolResult> => {
       const start = Date.now();
       try {
         const parsed = inputSchema.safeParse(input ?? {});
@@ -143,7 +148,9 @@ export function registerCascadeTool<TSchema extends z.ZodTypeAny>(
           }
         }
 
-        const result = await handler(parsed.data);
+        const result = await runWithRequestSignal(context?.mcpReq.signal, () =>
+          handler(parsed.data),
+        );
 
         const formatted = formatResponse(result, name, {
           cache: deps?.cache,

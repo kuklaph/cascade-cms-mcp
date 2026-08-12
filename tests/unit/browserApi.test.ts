@@ -108,6 +108,7 @@ const configured = {
   url: "https://example.cascadecms.com/api/v1/",
   timeoutMs: 30000,
   maxConcurrentRequests: 10,
+  requestBatchDelayMs: 3000,
   browserUsername: "user+name@example.com & admin",
   browserPassword: "p@ss word&=+",
 };
@@ -366,6 +367,7 @@ describe("createBrowserSession", () => {
         url: "https://example.cascadecms.com/api/v1/",
         timeoutMs: 30000,
         maxConcurrentRequests: 10,
+        requestBatchDelayMs: 3000,
       },
       fetchImpl as any,
     );

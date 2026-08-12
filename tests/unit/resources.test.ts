@@ -22,6 +22,7 @@ import { createDraftCache } from "../../src/assetDrafts.js";
 import { EntityTypeSchema } from "../../src/schemas/common.js";
 import { createMockClient } from "../fixtures/mock-client.js";
 import { tabsFixture } from "../fixtures/read-response-fixtures.js";
+import { currentRequestSignal } from "../../src/requestContext.js";
 
 /** A captured `server.registerResource(name, uri, config, readCallback)` call. */
 interface RegisteredResource {
@@ -259,6 +260,32 @@ describe("cascade://text-encoding resource", () => {
 // =============================================================================
 
 describe("cascade://sites resource", () => {
+  test("makes the MCP cancellation signal available to the API client", async () => {
+    const { server, resources } = makeMockServer();
+    const controller = new AbortController();
+    const client = createMockClient({
+      listSites: mock(async () => ({
+        sameSignal: currentRequestSignal() === controller.signal,
+      })),
+    });
+    registerCascadeResources(server as any, client, {
+      assetCache: createAssetCache(),
+      draftCache: createDraftCache(),
+    });
+    const sites = resources.find((r) => r.uri === "cascade://sites")!;
+    const read = sites.readCallback as unknown as (
+      uri: URL,
+      context: { mcpReq: { signal: AbortSignal } },
+    ) => Promise<ReadResourceResult>;
+
+    const result = await read(
+      new URL("cascade://sites"),
+      { mcpReq: { signal: controller.signal } },
+    );
+
+    expect(JSON.parse(firstContentText(result))).toEqual({ sameSignal: true });
+  });
+
   test("fetch calls client.listSites() and returns its result as JSON", async () => {
     const SITES_RESPONSE = {
       success: true,

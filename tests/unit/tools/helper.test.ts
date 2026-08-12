@@ -11,6 +11,7 @@ import {
 } from "../../../src/tools/helper.js";
 import { createResponseCache } from "../../../src/cache.js";
 import type { ToolBlockRule, ToolBlockStore } from "../../../src/toolBlocks.js";
+import { currentRequestSignal } from "../../../src/requestContext.js";
 
 interface MockServer {
   registerTool: ReturnType<typeof mock>;
@@ -147,6 +148,38 @@ describe("registerCascadeTool", () => {
       success: true,
       got: { name: "alice", count: 1 },
     });
+  });
+
+  test("makes the MCP cancellation signal available during the tool handler", async () => {
+    const server = makeMockServer();
+    const controller = new AbortController();
+    const handler = mock(async () => {
+      await Promise.resolve();
+      return {
+        success: true,
+        sameSignal: currentRequestSignal() === controller.signal,
+      };
+    });
+
+    registerCascadeTool(server as any, {
+      name: "sample",
+      title: "Sample",
+      description: "desc",
+      inputSchema: SampleSchema,
+      annotations: SAMPLE_ANNOTATIONS,
+      handler,
+    });
+
+    const wrapped = server.registerTool.mock.calls[0][2] as (
+      input: unknown,
+      context: { mcpReq: { signal: AbortSignal } },
+    ) => Promise<CallToolResult>;
+    const result = await wrapped(
+      { name: "alice" },
+      { mcpReq: { signal: controller.signal } },
+    );
+
+    expect(parsedText(result)).toEqual({ success: true, sameSignal: true });
   });
 
   test("rejects unknown top-level fields before handler or tool-block checks", async () => {
