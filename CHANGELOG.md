@@ -2,7 +2,7 @@
 
 All notable changes to `cascade-cms-mcp-server` will be documented here.
 
-## Unreleased
+## 3.0.1 - 2026-08-12
 
 ### Added
 
